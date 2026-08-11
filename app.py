@@ -1698,6 +1698,8 @@ def download_all_individual_tables():
     
 @app.route('/download_all_binfqc_tables', methods=['POST'])
 def download_all_binfqc_tables():
+    return "BINF QC downloads are temporarily unavailable.", 503
+
     
     with download_lock:
         encoding_type = request.form['encoding_type']    

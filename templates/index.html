@@ -192,25 +192,20 @@
     <div class="container">
         <h1>Upload to <i>SMDB</i> (Sample Metadata DataBase)</h1>    
 
-        <div class="section">
-        </div>
-
+   
         <div class="section">
             <h2>Accepted upload file templates</h2>
             <p>To ensure high data quality, only strictly formatted files are allowed for uploading. These formats can be ensured using an upload file template for filling out meta data. 
                 If you do not have a template, 
-                you might be able to find it below. Otherwise contact the database administrator for help (magnus.johannsen@sund.ku.dk).
+                you might be able to find it. Otherwise contact the database administrator for help (magnus.johannsen@sund.ku.dk).
                 <br>
                 <br>
-                NOTE: The below templates are updated automatically as changes are made to the database. So make sure to <b>download a new one everytime you need to fill out meta data</b>, or it might not be
+                NOTE: The templates are updated automatically as changes are made to the database. So make sure to <b>download a new one everytime you need to fill out meta data</b>, or it might not be
                 compatible with the database.
                 <br>
                 <br>
-                <h3>Download templates here:</h3>
-            </p>
-            <a href="/templates/download">Download eDNA field sample template</a>
-            
-            <p>Template for master depth specification can be found <a href="{{ url_for('download') }}">here</a></p>
+                <h3>Download templates <a href="{{ url_for('download') }}#master_depths_template">here</a></h3>
+ 
         </div>
 
         <div class="section">
@@ -289,9 +284,9 @@
                     <input type="email" id="send_receipt_to" name="send_receipt_to" required>
                 </div>
                 <br>
+                
                 <br>
-                <br>
-                <h3>Lane barcode specific input - only fill if you're uploading Lane Barcode HTML</h3>
+                <!-- <h3>Lane barcode specific input - only fill if you're uploading Lane Barcode HTML</h3>
                 
                 <div class="form-group">
                     <label for="num_of_library_pools">Select number of library pools sequenced on the flowcell:</label>
@@ -307,8 +302,8 @@
 
                 <div id="tube_tags">
                     <input type="text" id='single_tube' name='single_tube' placeholder="Insert tag of pool that was sequenced on all 4 lanes, or pick a different option above">
-                </div>
-      <br>
+                </div> -->
+
 
 
                 <div>

@@ -92,10 +92,10 @@ pre {
     <br>
     <br>
     <h1></h1>
-  
+
     
     <div class="container">
-        <h3 id="download_all_individual_tables">Download All SMDB Tables </h3>
+        <h3 id="download_all_individual_tables">📚 Download All SMDB Tables </h3>
         <p>Press the "Download all tables..." button below to download all raw database tables, including both old unstandardized CGG tables and new standardized field sample data.</p>
         <p class="note">Note: You might need to convert data to a common case to avoid case sensitivity issues if you cannot do case-insensitive filtering.</p>
         <form method="post" action="/download_all_individual_tables">
@@ -109,8 +109,7 @@ pre {
                 <p class="note">Use UTF-8 if in doubt</p>
                 
             </div>
-            <button type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit();">Download all individual tables...</button>
-            <p class="note">NOTE: The button will be disabled when clicked. Update the page to re-enable it</p>
+            <button type="submit" class="btn btn-primary">Download all individual tables...</button>
             <!-- <button type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit(); setTimeout(() => {this.disabled=false;}, 7000);">Download all individual tables...</button> -->
         </form>
         <br>
@@ -121,9 +120,11 @@ pre {
     </div>
 
     <div class="container">
-        <h3 id="download_all_individual_tables">Download all BINF QC Tables </h3>
+        <h3 id="download_all_individual_tables">🔬 Download all BINF QC Tables </h3>
         <p>Press the "Download all BINF QC tables..." button below to download all raw database tables.</p>
-        <p class="note">Note: You might need to convert data to a common case to avoid case sensitivity issues if you cannot do case-insensitive filtering.</p>
+        <p class="note">Note: You might need to convert data to a common case to avoid case sensitivity issues if you cannot do case-insensitive filtering.
+
+            <br>
         <form method="post" action="/download_all_binfqc_tables">
             <div class="form-group">
                 <label for="encoding_type">Encoding:</label>
@@ -135,8 +136,7 @@ pre {
                 <p class="note">Use UTF-8 if in doubt</p>
                 
             </div>
-            <button type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit();">Download all BINF QC tables...</button>
-            <p class="note">NOTE: The button will be disabled when clicked. Update the page to re-enable it</p>
+            <button type="submit" class="btn btn-primary" disabled>DISABLED TEMPORARILY DUE TO PERFORMACE ISSUES...</button>
             <!-- <button type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit(); setTimeout(() => {this.disabled=false;}, 7000);">Download all individual tables...</button> -->
         </form>
         <br>
@@ -148,7 +148,7 @@ pre {
     </div>
 
     <div class="container">
-        <h3 id="joined_smdb_data">Download Joined Standardized SMDB Data (outer joined) </h3>
+        <h3 id="joined_smdb_data">🔗 Download Joined Standardized SMDB Data (outer joined) </h3>
         <p>Select which databases you want to include in the download and then press the "Download joined data..." button below to download a zip file with the selected data included.</p>
         <p class="note">Note: You might need to convert data to a common case to avoid case sensitivity issues.</p>
 
@@ -169,8 +169,7 @@ pre {
                     To distinguish between reports, use the binf_qc_report_id or binf_qc_report_path column.
                  </p> -->
             </div>
-            <button id="merged_std" type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit();">Download joined data...</button>
-            <p class="note">The button will be disabled when clicked. Update the page to re-enable it</p>
+            <button id="merged_std" type="submit" class="btn btn-primary">Download joined data...</button>
         </form>
         <br>
         To download the same using curl, use the following command in your terminal:
@@ -182,15 +181,14 @@ pre {
     
     
     <div class="container">
-        <h3 id="cgg_data">Download CGG Sediment/Water Spreadsheet </h3>
+        <h3 id="cgg_data">🌍 Download CGG Sediment/Water Spreadsheet </h3>
         <p>CGG Sediment/Water Spreadsheet is an old spreadsheet that contains non-standardized data and is therefore seperated from SMDB data. 
             If you cant find your data in some of the other options above, this might be the place to look for it.</p>
         <p class="note">Note: You might need to convert data to a common case to avoid case sensitivity issues.</p>
 
         <form method="post" action="/download_cgg">
 
-            <button id="merged_std" type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit();">Download CGG spreadsheet...</button>
-            <p class="note">The button will be disabled when clicked. Update the page to re-enable it</p>
+            <button id="merged_std" type="submit" class="btn btn-primary">Download CGG spreadsheet...</button>
         </form>
          <br>
         To download the same using curl, use the following command in your terminal:
@@ -200,8 +198,18 @@ pre {
     </div>
 
     <div class="container">
-        <h3 id="master_depths_template">Download master depths template</h3>
-        Mostly only for Marie-Louise. Feel free to use it, if you find it useful. <br><br> 
+        <h3 id="master_depths_template">📝 Data templates and forms</h3>
+        <h5>eDNA field sample metadata</h5> 
+         <form method="get" action="/templates/download">
+                
+
+            <button type="submit" class="btn btn-primary">Download eDNA field sample metadata template...</button>
+            <!-- <button type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit(); setTimeout(() => {this.disabled=false;}, 7000);">Download all individual tables...</button> -->
+        </form>
+
+<br>
+        <h5>Master Depth Template</h5> 
+         Mostly only for Marie-Louise. Feel free to use it, if you find it useful.
 
         <form method="post" action="/PI_download_standardized">
             <div class="form-group">
@@ -230,8 +238,7 @@ pre {
                 <a href="/download_all_field_sample_ids" download>Download a list of all field sample IDs</a>
                 <textarea class="form-control" id="input_values" name="input_values" rows="5" placeholder="Example:&#10;ISL2020_09_95&#10;ISL22_23A&#10;field_sample_N" required></textarea>
             </div>
-            <button type="submit" class="btn btn-primary mb-3" onclick="this.disabled=true; this.form.submit();">Download master depths template</button>
-            <p class="note">NOTE: The button will be disabled when clicked. Update the page to re-enable it</p>
+            <button type="submit" class="btn btn-primary mb-3">Download master depths template...</button>
         </form>
 
     </div>
@@ -240,3 +247,26 @@ pre {
 <br>
 <br>
 <br>
+
+<script>
+    document.querySelectorAll('form').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                return;
+            }
+
+            form.dataset.submitting = 'true';
+            form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach((button) => {
+                button.disabled = true;
+            });
+
+            setTimeout(() => {
+                form.dataset.submitting = 'false';
+                form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach((button) => {
+                    button.disabled = false;
+                });
+            }, 7000);
+        });
+    });
+</script>
