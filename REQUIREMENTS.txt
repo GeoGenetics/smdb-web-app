@@ -1,0 +1,21 @@
+# Runtime dependencies for the SMDB Flask web application.
+# Create a Python 3.11 virtual environment, then install with:
+#   python -m pip install -r REQUIREMENTS.txt
+
+Flask>=2.3,<4
+Flask-WTF>=1.2,<2
+SQLAlchemy>=1.4,<3
+psycopg2-binary>=2.9,<3
+
+numpy>=1.24,<3
+pandas>=2.0,<3
+openpyxl>=3.1,<4
+Pillow>=10,<12
+requests>=2.31,<3
+
+lxml>=6,<7
+html5lib>=1.1,<2
+xlrd>=2.0,<3
+
+folium>=0.15,<1
+geopy>=2.4,<3
