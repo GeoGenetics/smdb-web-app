@@ -24,6 +24,11 @@ set +a
 python app.py
 ```
 
+Set `SMDB_DISABLE_EMAIL=true` in local development to skip outbound receipt
+and administrative emails without changing the uploader recorded in the
+database. Configure a working mail transport and set it to `false` (or remove
+the variable) when email delivery is required.
+
 `SMDB_DB_USER` configures one role for both reads and writes. Alternatively,
 set `SMDB_DB_READ_USER` and `SMDB_DB_WRITE_USER` (and their corresponding
 password variables) when separate roles are available.

@@ -6,6 +6,16 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 
+
+def email_is_disabled():
+    """Return whether outbound mail is explicitly disabled by configuration."""
+    return os.environ.get("SMDB_DISABLE_EMAIL", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 def send_email_old(receivers, message, subject, paths_to_attachments=[], sender="glj523@dandyweb01fl.unicph.domain"):
     # Set up the MIME message
     msg = MIMEMultipart()
@@ -56,6 +66,10 @@ def send_email_old(receivers, message, subject, paths_to_attachments=[], sender=
 def send_email(receiver: str, message, subject, path_to_attachment,
                sender="glj523@dandyweb01fl.unicph.domain"):
 
+    if email_is_disabled():
+        print("Outbound email disabled by SMDB_DISABLE_EMAIL.")
+        return None
+
     if receiver is None or receiver == "":
         raise ValueError("Email address must be provided.")
     
@@ -84,4 +98,3 @@ def send_email(receiver: str, message, subject, path_to_attachment,
             f"stdout:\n{res.stdout}\n"
             f"stderr:\n{res.stderr}"
         )
-    
