@@ -229,11 +229,12 @@ real bug reports and uploads:
   - [x] filter sampling requires no depth;
   - [x] approved uncategorized methods, including `Other` and `Data not collected`,
     are passed through to generic depth validation;
-- [ ] generic depth rules: one depth when required, mutually exclusive discrete
+- [x] generic depth rules: one depth when required, mutually exclusive discrete
       and interval depth, paired interval endpoints, ascending interval, and
       depth inference consistency;
-- [ ] `Other` values-column requirement, if this is confirmed as a database or
-      documented template rule; otherwise report it first as a warning.
+- [x] `Other` values-column requirement, confirmed by
+      `uploaded_data.validate_other_values()` for `primary_sampling_method`;
+      the initial preflight reports the missing/blank case as an error.
 
 For every rule:
 
@@ -245,7 +246,7 @@ For every rule:
 - [ ] document any intentional difference from a database trigger before
       merging it.
 
-For the special-category rules and the six previously completed rules, stable identifiers, terminology/parity,
+For the completed initial rule set, stable identifiers, terminology/parity,
 valid/invalid/null-or-blank/multi-row coverage, aggregation coverage, and
 intentional differences are recorded in
 `docs/field-sample-preflight-parity.md`. The remaining checklist applies to

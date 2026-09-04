@@ -16,6 +16,13 @@ boundary.
 | `field_sample.interval_sampling_method_requires_interval_depth_only` | `uploaded_data.check_depth_conditionals()` | For Monolith sampling, Coring, and Bulk sampling, requires both interval endpoints and no discrete depth. |
 | `field_sample.discrete_sampling_method_requires_discrete_depth_only` | `uploaded_data.check_depth_conditionals()` | For Tube, Syringe, Column, Scraping, and Block sampling, requires discrete depth and no interval endpoints. |
 | `field_sample.filter_sampling_method_requires_no_depth` | `uploaded_data.check_depth_conditionals()` | For Filter sampling, rejects any discrete or interval depth. |
+| `field_sample.depth_required_for_non_air_water_medium` | `uploaded_data.check_depth_conditionals()` | Requires at least one depth field for a nonblank sampling medium that is neither air nor water. |
+| `field_sample.discrete_and_interval_depth_mutually_exclusive` | `uploaded_data.check_depth_conditionals()` | Rejects a discrete depth combined with either interval endpoint. |
+| `field_sample.interval_depth_endpoints_must_be_paired` | `uploaded_data.check_depth_conditionals()` | Requires interval top and bottom depth to be both present or both absent. |
+| `field_sample.interval_depth_must_be_ascending` | `uploaded_data.check_depth_conditionals()` | Rejects an interval top depth greater than its bottom depth. |
+| `field_sample.depth_inference_method_required` | `uploaded_data.check_depth_conditionals()` | Requires `depth_inference_method` when discrete depth or interval top depth is supplied. |
+| `field_sample.depth_inference_method_without_depth` | `uploaded_data.check_depth_conditionals()` | Rejects `depth_inference_method` when every depth field is empty. |
+| `field_sample.other_values_required_for_primary_sampling_method` | `uploaded_data.validate_other_values()` | Requires a nonblank Other values field when primary sampling method is Other. |
 
 ## Intentional differences and boundaries
 
@@ -37,9 +44,14 @@ boundary.
   requirement and documents the gap rather than silently expanding scope.
 - `Other (specify in "Other values" column)`, `Data not collected`, and any
   other approved method outside the trigger's three fixed category arrays do
-  not receive a category-specific finding. They will receive the generic depth
-  checks in the next Phase 3 checkpoint, matching the trigger's fall-through
-  behavior.
+  not receive a category-specific finding. They receive the generic depth
+  checks, matching the trigger's fall-through behavior.
+- The database's `validate_other_values()` trigger parses each entry, maps a
+  template header to a canonical column name, and requires an entry for every
+  dropdown set to Other. This first preflight rule detects the unambiguous
+  missing/blank case for `primary_sampling_method` only; malformed entries,
+  mismatched column entries, and Other values in other dropdown columns remain
+  database-enforced until name-map-aware validation is added.
 - This slice deliberately does not yet reproduce all requirements in
   `field_sample_required_insert_check()` or all field-sample triggers. Those
   rules remain database-enforced until a later, explicitly documented slice.

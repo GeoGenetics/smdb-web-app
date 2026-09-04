@@ -24,6 +24,9 @@ TEMPLATE_COLUMNS = {
     "field_sampling_depth_discrete": "Sampling depth (discrete)",
     "field_sampling_interval_from": "Top depth",
     "field_sampling_interval_to": "Bottom depth",
+    "depth_inference_method": "Depth inference method",
+    "sampling_medium": "Sampling medium",
+    "other_values": "Other values",
     "field_sample_water_depth": "Water depth",
     "field_sample_age_estimate_oldest": "Oldest age estimate",
     "field_sample_age_estimate_youngest": "Youngest age estimate",
@@ -42,6 +45,13 @@ RULE_WATER_DEPTH_REQUIRED = "field_sample.water_depth_required_for_aquatic_conte
 RULE_INTERVAL_DEPTH_ONLY = "field_sample.interval_sampling_method_requires_interval_depth_only"
 RULE_DISCRETE_DEPTH_ONLY = "field_sample.discrete_sampling_method_requires_discrete_depth_only"
 RULE_FILTER_SAMPLING_NO_DEPTH = "field_sample.filter_sampling_method_requires_no_depth"
+RULE_DEPTH_REQUIRED = "field_sample.depth_required_for_non_air_water_medium"
+RULE_DEPTH_TYPES_EXCLUSIVE = "field_sample.discrete_and_interval_depth_mutually_exclusive"
+RULE_INTERVAL_ENDPOINTS_PAIRED = "field_sample.interval_depth_endpoints_must_be_paired"
+RULE_INTERVAL_ASCENDING = "field_sample.interval_depth_must_be_ascending"
+RULE_DEPTH_INFERENCE_REQUIRED = "field_sample.depth_inference_method_required"
+RULE_DEPTH_INFERENCE_NOT_ALLOWED = "field_sample.depth_inference_method_without_depth"
+RULE_OTHER_VALUES_REQUIRED = "field_sample.other_values_required_for_primary_sampling_method"
 
 # These are the two literal categories in
 # uploaded_data.check_water_depth_conditionals(), not a copied allowed-values
@@ -72,6 +82,16 @@ NO_DEPTH_SAMPLING_METHODS = frozenset({"Filter sampling"})
 UNCATEGORIZED_SAMPLING_METHODS = frozenset(
     {"Other (specify in \"Other values\" column)", "Data not collected"}
 )
+AIR_OR_WATER_MEDIA = frozenset(
+    {
+        "Air [ENVO:00002005]",
+        "Sea water [ENVO:00002149]",
+        "Brackish water [ENVO:00002019]",
+        "Fresh water [ENVO:00002011]",
+        "Rainwater [ENVO:01000600]",
+    }
+)
+OTHER_SAMPLING_METHOD = 'Other (specify in "Other values" column)'
 
 
 def _is_blank(value: Any) -> bool:
@@ -332,6 +352,149 @@ def _validate_sampling_method_depth_category(
         return
 
 
+def _validate_generic_depth_rules(
+    row: Mapping[str, Any],
+    report: ValidationReport,
+) -> None:
+    """Apply the non-category-specific checks from check_depth_conditionals."""
+    discrete_depth = row.get("field_sampling_depth_discrete")
+    interval_from = row.get("field_sampling_interval_from")
+    interval_to = row.get("field_sampling_interval_to")
+    depth_inference_method = row.get("depth_inference_method")
+    sampling_medium = row.get("sampling_medium")
+    has_discrete_depth = not _is_blank(discrete_depth)
+    has_interval_from = not _is_blank(interval_from)
+    has_interval_to = not _is_blank(interval_to)
+    has_any_depth = has_discrete_depth or has_interval_from or has_interval_to
+    template_row = _template_row(row)
+
+    if (
+        not has_any_depth
+        and not _is_blank(sampling_medium)
+        and sampling_medium not in AIR_OR_WATER_MEDIA
+    ):
+        report.add(
+            ValidationError(
+                rule_id=RULE_DEPTH_REQUIRED,
+                message=(
+                    "At least one depth field must be filled when sampling_medium "
+                    "is not air or water type."
+                ),
+                template_row=template_row,
+                template_column=TEMPLATE_COLUMNS["sampling_medium"],
+                database_column="sampling_medium",
+                value=sampling_medium,
+            )
+        )
+
+    if has_discrete_depth and (has_interval_from or has_interval_to):
+        report.add(
+            ValidationError(
+                rule_id=RULE_DEPTH_TYPES_EXCLUSIVE,
+                message=(
+                    "Discrete depth cannot be filled together with top depth "
+                    "(field_sampling_interval_from) or bottom depth "
+                    "(field_sampling_interval_to)."
+                ),
+                template_row=template_row,
+                template_column=TEMPLATE_COLUMNS["field_sampling_depth_discrete"],
+                database_column="field_sampling_depth_discrete",
+                value=discrete_depth,
+            )
+        )
+
+    if has_interval_from != has_interval_to:
+        report.add(
+            ValidationError(
+                rule_id=RULE_INTERVAL_ENDPOINTS_PAIRED,
+                message=(
+                    "field_sampling_interval_from and field_sampling_interval_to "
+                    "must both be filled or both be empty."
+                ),
+                template_row=template_row,
+                template_column=TEMPLATE_COLUMNS["field_sampling_interval_from"],
+                database_column="field_sampling_interval_from",
+                value=interval_from,
+            )
+        )
+
+    if (
+        has_interval_from
+        and has_interval_to
+        and isinstance(interval_from, Number)
+        and not isinstance(interval_from, bool)
+        and isinstance(interval_to, Number)
+        and not isinstance(interval_to, bool)
+        and interval_from > interval_to
+    ):
+        report.add(
+            ValidationError(
+                rule_id=RULE_INTERVAL_ASCENDING,
+                message=(
+                    f"field_sampling_interval_from ({interval_from}) cannot be "
+                    f"greater than field_sampling_interval_to ({interval_to})."
+                ),
+                template_row=template_row,
+                template_column=TEMPLATE_COLUMNS["field_sampling_interval_from"],
+                database_column="field_sampling_interval_from",
+                value=interval_from,
+            )
+        )
+
+    # This uses the trigger's precise condition: discrete depth or top depth,
+    # rather than bottom depth alone, requires a depth inference method.
+    if (has_discrete_depth or has_interval_from) and _is_blank(depth_inference_method):
+        report.add(
+            ValidationError(
+                rule_id=RULE_DEPTH_INFERENCE_REQUIRED,
+                message="depth_inference_method is required when any depth field is filled.",
+                template_row=template_row,
+                template_column=TEMPLATE_COLUMNS["depth_inference_method"],
+                database_column="depth_inference_method",
+                value=depth_inference_method,
+            )
+        )
+
+    if not has_any_depth and not _is_blank(depth_inference_method):
+        report.add(
+            ValidationError(
+                rule_id=RULE_DEPTH_INFERENCE_NOT_ALLOWED,
+                message="depth_inference_method should not be filled when no depth fields are filled.",
+                template_row=template_row,
+                template_column=TEMPLATE_COLUMNS["depth_inference_method"],
+                database_column="depth_inference_method",
+                value=depth_inference_method,
+            )
+        )
+
+
+def _validate_other_values_requirement(
+    row: Mapping[str, Any],
+    report: ValidationReport,
+) -> None:
+    """Require a nonblank Other values entry for primary_sampling_method=Other."""
+    if (
+        row.get("primary_sampling_method") != OTHER_SAMPLING_METHOD
+        or not _is_blank(row.get("other_values"))
+    ):
+        return
+
+    report.add(
+        ValidationError(
+            rule_id=RULE_OTHER_VALUES_REQUIRED,
+            message=(
+                'Column "primary_sampling_method" is set to '
+                '"Other (specify in \"Other values\" column)" but no '
+                'corresponding entry was found in "other_values".'
+            ),
+            template_row=_template_row(row),
+            template_column=TEMPLATE_COLUMNS["other_values"],
+            database_column="other_values",
+            value=row.get("other_values"),
+        )
+    )
+
+
 def validate_field_sample_rows(
     rows: Iterable[Mapping[str, Any]],
     reference_data: ReferenceDataProvider,
@@ -352,4 +515,6 @@ def validate_field_sample_rows(
         _validate_environment_context_pair(row, report, reference_data)
         _validate_water_depth_requirement(row, report)
         _validate_sampling_method_depth_category(row, report)
+        _validate_generic_depth_rules(row, report)
+        _validate_other_values_requirement(row, report)
     return report
