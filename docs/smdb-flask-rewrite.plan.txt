@@ -217,12 +217,12 @@ Goal: implement the first user-facing aggregate report with no Flask changes.
 The initial rule set is deliberately limited to rules recently demonstrated by
 real bug reports and uploads:
 
-- [ ] required `template_version`;
-- [ ] allowed-value/foreign-key membership, including `collected_as_field_control`;
-- [ ] oldest age estimate greater than or equal to youngest age estimate;
-- [ ] broad/local environmental-context pair compatibility;
-- [ ] water depth required for marine/freshwater broad contexts;
-- [ ] primary sampling method membership;
+- [x] required `template_version`;
+- [x] allowed-value/foreign-key membership, including `collected_as_field_control`;
+- [x] oldest age estimate greater than or equal to youngest age estimate;
+- [x] broad/local environmental-context pair compatibility;
+- [x] water depth required for marine/freshwater broad contexts;
+- [x] primary sampling method membership;
 - [ ] special sampling categories:
   - interval methods require interval depth only;
   - discrete methods require discrete depth only;
@@ -244,6 +244,12 @@ For every rule:
 - [ ] test that a row does not prevent unrelated rows from being validated;
 - [ ] document any intentional difference from a database trigger before
       merging it.
+
+For the six completed rules above, stable identifiers, terminology/parity,
+valid/invalid/null-or-blank/multi-row coverage, aggregation coverage, and
+intentional differences are recorded in
+`docs/field-sample-preflight-parity.md`. The remaining checklist applies to
+each later Phase 3 rule before it is marked complete.
 
 Exit criterion: a synthetic multi-row field-sample input produces a
 deterministic report containing all applicable errors, with no database write.

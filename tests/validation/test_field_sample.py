@@ -1,10 +1,225 @@
-"""Phase 0 import smoke test for field-sample validation."""
+"""Unit tests for the initial pure field-sample preflight rule slice."""
 
 import unittest
 
+from tests.validation.fixtures import common_reference_data, field_sample_row
+from validation.field_sample import (
+    RULE_AGE_INTERVAL_ORDER,
+    RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID,
+    RULE_FIELD_CONTROL_NOT_ALLOWED,
+    RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED,
+    RULE_TEMPLATE_VERSION_REQUIRED,
+    RULE_WATER_DEPTH_REQUIRED,
+    validate_field_sample_rows,
+)
+from validation.reference_data import InMemoryReferenceDataProvider
 
-class FieldSampleValidationImportTest(unittest.TestCase):
+
+def reference_provider():
+    """Return a new fixture-backed provider for each test."""
+    data = common_reference_data()
+    return InMemoryReferenceDataProvider(
+        field_sampling_method_values=data["field_sampling_methods"],
+        field_control_values=data["field_controls"],
+        depth_inference_method_values=data["depth_inference_methods"],
+        environment_context_pairs=data["environment_context_pairs"],
+    )
+
+
+class FieldSampleValidationTest(unittest.TestCase):
+    def validate(self, *rows):
+        return validate_field_sample_rows(rows, reference_provider())
+
     def test_module_imports_without_flask_or_database_access(self):
         from validation import field_sample
 
         self.assertIsNotNone(field_sample)
+
+    def test_valid_baseline_row_has_no_findings(self):
+        report = self.validate(field_sample_row())
+
+        self.assertFalse(report.has_errors)
+        self.assertEqual(report.findings, ())
+
+    def test_template_version_reports_null_empty_and_whitespace(self):
+        for value in (None, "", "   "):
+            with self.subTest(value=value):
+                report = self.validate(field_sample_row(template_version=value))
+
+                self.assertEqual(
+                    [error.rule_id for error in report.errors],
+                    [RULE_TEMPLATE_VERSION_REQUIRED],
+                )
+                self.assertEqual(report.errors[0].template_row, 11)
+
+    def test_field_control_membership_accepts_valid_and_blank_foreign_keys(self):
+        report = self.validate(
+            field_sample_row(),
+            field_sample_row(
+                __template_row__=12,
+                collected_as_field_control="",
+            ),
+        )
+
+        self.assertEqual(report.findings, ())
+
+    def test_field_control_membership_reports_an_unknown_value(self):
+        report = self.validate(
+            field_sample_row(
+                collected_as_field_control="Maybe",
+            )
+        )
+
+        self.assertEqual(
+            {error.rule_id for error in report.errors},
+            {RULE_FIELD_CONTROL_NOT_ALLOWED},
+        )
+
+    def test_primary_sampling_method_membership_accepts_valid_and_blank_values(self):
+        report = self.validate(
+            field_sample_row(),
+            field_sample_row(__template_row__=12, primary_sampling_method=None),
+            field_sample_row(__template_row__=13, primary_sampling_method="  "),
+        )
+
+        self.assertEqual(report.findings, ())
+
+    def test_primary_sampling_method_membership_reports_an_unknown_value(self):
+        report = self.validate(
+            field_sample_row(primary_sampling_method="Unknown method")
+        )
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED],
+        )
+
+    def test_age_interval_order_accepts_equal_and_skips_null_or_blank_endpoints(self):
+        report = self.validate(
+            field_sample_row(
+                field_sample_age_estimate_oldest=1.0,
+                field_sample_age_estimate_youngest=1.0,
+            ),
+            field_sample_row(
+                __template_row__=12,
+                field_sample_age_estimate_oldest=None,
+            ),
+            field_sample_row(
+                __template_row__=13,
+                field_sample_age_estimate_youngest=" ",
+            ),
+        )
+
+        self.assertEqual(report.findings, ())
+
+    def test_age_interval_order_reports_oldest_younger_than_youngest(self):
+        report = self.validate(
+            field_sample_row(
+                field_sample_age_estimate_oldest=1.0,
+                field_sample_age_estimate_youngest=2.0,
+            )
+        )
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [RULE_AGE_INTERVAL_ORDER],
+        )
+
+    def test_environment_context_pair_accepts_valid_pair(self):
+        report = self.validate(field_sample_row())
+
+        self.assertNotIn(
+            RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID,
+            [error.rule_id for error in report.errors],
+        )
+
+    def test_environment_context_pair_reports_invalid_and_missing_components(self):
+        rows = (
+            field_sample_row(
+                local_scale_environmental_context="Freshwater lake biome [ENVO:01000252]"
+            ),
+            field_sample_row(
+                __template_row__=12,
+                local_scale_environmental_context=None,
+            ),
+            field_sample_row(
+                __template_row__=13,
+                broad_scale_environmental_context=" ",
+            ),
+        )
+
+        report = self.validate(*rows)
+
+        self.assertEqual([error.template_row for error in report.errors], [11, 12, 13])
+        self.assertTrue(
+            all(
+                error.rule_id == RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID
+                for error in report.errors
+            )
+        )
+
+    def test_water_depth_requirement_accepts_aquatic_depth_and_non_aquatic_blank(self):
+        report = self.validate(
+            field_sample_row(),
+            field_sample_row(
+                __template_row__=12,
+                broad_scale_environmental_context="Freshwater biome [ENVO:00000873]",
+                local_scale_environmental_context="Freshwater lake biome [ENVO:01000252]",
+                field_sample_water_depth=4.5,
+            ),
+        )
+
+        self.assertEqual(report.findings, ())
+
+    def test_water_depth_requirement_reports_null_empty_and_whitespace(self):
+        rows = tuple(
+            field_sample_row(
+                __template_row__=row_number,
+                broad_scale_environmental_context="Freshwater biome [ENVO:00000873]",
+                local_scale_environmental_context="Freshwater lake biome [ENVO:01000252]",
+                field_sample_water_depth=value,
+            )
+            for row_number, value in ((11, None), (12, ""), (13, "  "))
+        )
+
+        report = self.validate(*rows)
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [RULE_WATER_DEPTH_REQUIRED] * 3,
+        )
+        self.assertEqual([error.template_row for error in report.errors], [11, 12, 13])
+
+    def test_multiple_errors_are_aggregated_and_later_rows_are_still_checked(self):
+        report = self.validate(
+            field_sample_row(
+                template_version=None,
+                primary_sampling_method="Unknown method",
+                collected_as_field_control="Maybe",
+                field_sample_age_estimate_oldest=1.0,
+                field_sample_age_estimate_youngest=2.0,
+                local_scale_environmental_context="Forest biome [ENVO:01000174]",
+                broad_scale_environmental_context="Freshwater biome [ENVO:00000873]",
+                field_sample_water_depth=None,
+            ),
+            field_sample_row(
+                __template_row__=12,
+                collected_as_field_control="Maybe",
+            ),
+        )
+
+        self.assertEqual(
+            {error.rule_id for error in report.group_by_row()[11]},
+            {
+                RULE_TEMPLATE_VERSION_REQUIRED,
+                RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED,
+                RULE_FIELD_CONTROL_NOT_ALLOWED,
+                RULE_AGE_INTERVAL_ORDER,
+                RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID,
+                RULE_WATER_DEPTH_REQUIRED,
+            },
+        )
+        self.assertEqual(
+            [error.rule_id for error in report.group_by_row()[12]],
+            [RULE_FIELD_CONTROL_NOT_ALLOWED],
+        )
