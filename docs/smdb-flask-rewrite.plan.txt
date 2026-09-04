@@ -191,11 +191,11 @@ Phase 2 — validation models and reference-data boundary
 
 Goal: provide the shared primitives used by all future preflight rules.
 
-- [ ] Implement `ValidationError` and `ValidationReport` as specified in
+- [x] Implement `ValidationError` and `ValidationReport` as specified in
       section 6.
-- [ ] Unit-test ordering, grouping, merging, empty reports, and presentation
+- [x] Unit-test ordering, grouping, merging, empty reports, and presentation
       serialization.
-- [ ] Implement a narrow `ReferenceDataProvider` interface in
+- [x] Implement a narrow `ReferenceDataProvider` interface in
       `validation/reference_data.py`.
 - [ ] Implement a production provider using the existing read-only database
       configuration; use parameterized SQL and explicit schema/table queries.
