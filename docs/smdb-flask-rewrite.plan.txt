@@ -1,0 +1,403 @@
+SMDB Flask additive rewrite and upload-preflight plan
+=====================================================
+
+Status: proposed; no legacy behavior may be removed under this plan without a
+separate, explicit decision.
+
+
+1. Purpose
+----------
+
+Improve the maintainability and user experience of the SMDB Flask web app
+without a framework replacement and without weakening PostgreSQL as the final
+data-integrity boundary.
+
+The first practical outcome is a field-sample upload preflight that reports
+all detectable errors in one response before an insert is attempted. It must
+operate alongside the current upload implementation until it has demonstrated
+parity with the existing database validations.
+
+
+2. Principles and non-negotiable boundaries
+-------------------------------------------
+
+- Flask remains the framework. This is a refactor of application boundaries,
+  not a rewrite into a different web framework.
+- Work is additive first. Existing routes, templates, parser entry points,
+  database writes, and trigger behavior remain in place until a replacement is
+  validated and deliberately adopted.
+- PostgreSQL constraints, foreign keys, and triggers remain authoritative.
+  Python preflight improves feedback; it must not be the only integrity check.
+- Production is never a development test target. Use SMDB-dev and its
+  disposable data for integration tests.
+- Preflight validation must not insert, update, delete, or create database
+  objects.
+- Validation output must identify the template row, template column label,
+  database field where useful, rule identifier, and a clear remediation.
+- Reference values are read from the configured development or production
+  database; they are not duplicated as hard-coded Python lists.
+- No secrets, production exports, user-uploaded sheets, session data, or email
+  credentials are committed to Git.
+
+
+3. Scope
+--------
+
+In scope for the first implementation:
+
+- field-sample uploads only;
+- a pure-Python validation model and field-sample validation rules;
+- read-only reference-data lookups through the existing read connection;
+- unit tests for every new validation rule;
+- optional, non-blocking shadow execution from the current upload path;
+- later opt-in display of a preflight report before the current confirmation
+  and insert flow.
+
+Explicitly out of scope initially:
+
+- replacing Flask, Jinja templates, or the current user interface wholesale;
+- changing PostgreSQL trigger/constraint policy merely to match Python;
+- reworking non-field-sample upload types;
+- redesigning login/authentication, deployment, download routes, or email;
+- deleting, moving, or rewriting legacy upload behavior;
+- importing production application data into development.
+
+
+4. Current baseline
+-------------------
+
+- `app.py` currently owns routes and substantial upload orchestration.
+- `utils/parsers.py` and related modules normalize uploaded sheets.
+- PostgreSQL triggers currently provide row-level validation and abort on the
+  first failing rule, producing cascading user retries.
+- Existing tests use Python's `unittest`. Preserve that standard for the new
+  code rather than introduce a test-framework migration.
+- `tests/date_parser_test.py` is a useful parser-level test.
+- `unit_tests/upload_tests.py` contains placeholder paths and imports `app` at
+  module import time; treat it as a future repair target, not as reliable
+  coverage.
+- SMDB-dev, dedicated application roles, and a tunnel-based local web-app
+  setup already exist and are the integration-test environment.
+
+
+5. Target additive structure
+----------------------------
+
+The new modules live beside the existing code. They must initially have no
+effect on route registration or upload behavior.
+
+    smdb-web-app/
+      services/
+        __init__.py
+        upload_workflow.py        # orchestration; no Flask request/session objects
+      validation/
+        __init__.py
+        models.py                 # ValidationError / ValidationReport
+        field_sample.py           # field-sample preflight rules
+        reference_data.py         # read-only, bounded-lifetime reference lookups
+      routes/
+        __init__.py
+        uploads.py                # eventual Flask upload endpoints only
+      tests/
+        validation/
+          __init__.py
+          test_models.py
+          test_field_sample.py
+          test_reference_data.py
+        services/
+          __init__.py
+          test_upload_workflow.py
+
+Package `__init__.py` files make imports explicit and avoid relying on
+implicit namespace-package behavior. Production routes remain in `app.py`
+until the new route module has passed its equivalence tests.
+
+
+6. Validation contract
+----------------------
+
+`validation/models.py` establishes a stable, framework-independent interface.
+At minimum:
+
+- `ValidationError`
+  - `rule_id`: stable machine-readable identifier, e.g.
+    `field_sample.age_interval_order`;
+  - `template_row`: one-based user-visible spreadsheet row number;
+  - `template_column`: user-visible header from the template;
+  - `database_column`: optional canonical database-column name;
+  - `message`: concise remediation-focused message;
+  - `value`: optional, safely rendered offending value;
+  - `severity`: initially `error` or `warning`.
+- `ValidationReport`
+  - ordered collection of errors and warnings;
+  - `has_errors` property;
+  - methods to add, merge, group by row, and serialize for Jinja/JSON/tests;
+  - deterministic ordering so tests and user reports are stable.
+
+Rules must return errors rather than raise expected validation exceptions.
+Unexpected programming/database failures remain exceptions and are logged as
+application failures.
+
+
+7. Phased delivery plan
+-----------------------
+
+Phase 0 — create the additive structure
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: establish empty, import-safe boundaries with zero behavioral change.
+
+- [ ] Create the `services/`, `validation/`, and `routes/` packages and the
+      files listed in section 5.
+- [ ] Add module docstrings that state each module's responsibility and its
+      prohibition on Flask globals in service/validation modules.
+- [ ] Create the test-package directories and a smoke test proving the new
+      modules import without starting Flask or connecting to PostgreSQL.
+- [ ] Confirm current app startup and the existing date-parser test behave as
+      before the scaffolding change.
+- [ ] Commit Phase 0 separately. It must contain no route-registration or
+      upload-flow changes.
+
+Exit criterion: the new directory structure exists, imports cleanly, and the
+legacy web app behaves identically.
+
+
+Phase 1 — establish test execution and fixtures
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: make new code easy to test and create a reliable baseline for later
+refactoring.
+
+- [ ] Document one standard command for the existing and new `unittest` suite,
+      for example `python -m unittest discover -s tests`.
+- [ ] Ensure tests can import pure validation modules without importing
+      `app.py`, opening a database connection, or requiring an SSH tunnel.
+- [ ] Add small synthetic row dictionaries/dataframes for valid and invalid
+      field-sample cases. Do not use production-derived upload rows as unit
+      fixtures.
+- [ ] Add fixture builders for common valid reference data and for missing or
+      unavailable reference data.
+- [ ] Mark or repair the existing placeholder upload test only when it can be
+      made deterministic; do not count it as coverage before then.
+- [ ] Add a test-run section to the web-app README and a developer-only test
+      dependency only if one becomes necessary. `unittest` requires none.
+
+Exit criterion: a documented local test command runs pure unit tests reliably
+without a running web server or database.
+
+
+Phase 2 — validation models and reference-data boundary
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: provide the shared primitives used by all future preflight rules.
+
+- [ ] Implement `ValidationError` and `ValidationReport` as specified in
+      section 6.
+- [ ] Unit-test ordering, grouping, merging, empty reports, and presentation
+      serialization.
+- [ ] Implement a narrow `ReferenceDataProvider` interface in
+      `validation/reference_data.py`.
+- [ ] Implement a production provider using the existing read-only database
+      configuration; use parameterized SQL and explicit schema/table queries.
+- [ ] Implement an in-memory fake provider for unit tests.
+- [ ] Define bounded request/workflow-level caching only; do not create a
+      process-lifetime cache that becomes stale after allowed-value updates.
+- [ ] Define a predictable validation error for reference-data lookup failure;
+      never silently treat unavailable reference data as valid.
+
+Exit criterion: field-sample validation can consume reference data through an
+interface that is unit-tested without PostgreSQL.
+
+
+Phase 3 — pure field-sample preflight rules
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: implement the first user-facing aggregate report with no Flask changes.
+
+The initial rule set is deliberately limited to rules recently demonstrated by
+real bug reports and uploads:
+
+- [ ] required `template_version`;
+- [ ] allowed-value/foreign-key membership, including `collected_as_field_control`;
+- [ ] oldest age estimate greater than or equal to youngest age estimate;
+- [ ] broad/local environmental-context pair compatibility;
+- [ ] water depth required for marine/freshwater broad contexts;
+- [ ] primary sampling method membership;
+- [ ] special sampling categories:
+  - interval methods require interval depth only;
+  - discrete methods require discrete depth only;
+  - filter sampling requires no depth;
+  - approved uncategorized methods, including `Other` and `Data not collected`,
+    receive generic depth validation;
+- [ ] generic depth rules: one depth when required, mutually exclusive discrete
+      and interval depth, paired interval endpoints, ascending interval, and
+      depth inference consistency;
+- [ ] `Other` values-column requirement, if this is confirmed as a database or
+      documented template rule; otherwise report it first as a warning.
+
+For every rule:
+
+- [ ] assign a stable rule identifier;
+- [ ] preserve the database rule's semantics and terminology;
+- [ ] write valid, invalid, null/blank, and multi-row tests;
+- [ ] test that multiple independent errors are returned together;
+- [ ] test that a row does not prevent unrelated rows from being validated;
+- [ ] document any intentional difference from a database trigger before
+      merging it.
+
+Exit criterion: a synthetic multi-row field-sample input produces a
+deterministic report containing all applicable errors, with no database write.
+
+
+Phase 4 — upload workflow service and shadow mode
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: connect parsing, reference lookup, and validation without changing what
+the user sees or whether the legacy route writes data.
+
+- [ ] Implement `services/upload_workflow.py` with explicit inputs and outputs:
+  parsed sheet(s), table type, parser options, reference provider, and report.
+- [ ] Keep Flask `request`, `session`, `flash`, `redirect`, and template
+      rendering out of this service.
+- [ ] Reuse the current parser output; do not rewrite parsing in this phase.
+- [ ] Add a configuration flag such as `SMDB_PREFLIGHT_MODE=off|shadow|enforce`.
+  Default to `off`; use `shadow` only in development first.
+- [ ] In shadow mode, run preflight and log/report its result internally while
+      preserving the current legacy upload behavior exactly.
+- [ ] Add tests with a fake provider verifying that workflow orchestration does
+      not write to the database and that report contents reach the caller.
+- [ ] Add integration tests against SMDB-dev for a small synthetic valid sheet
+      and targeted invalid sheets. Reset only explicitly created fixture rows.
+
+Exit criterion: shadow mode produces preflight results for real dev uploads
+without changing the legacy route's response or database behavior.
+
+
+Phase 5 — user-visible preflight report, opt-in
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: make aggregate feedback available while retaining an immediate rollback
+path to the legacy flow.
+
+- [ ] Add a new template/report view or a clearly separated section in the
+      existing confirmation flow.
+- [ ] Display errors grouped by row and column, plus a total count and clear
+      instruction that no data has been written.
+- [ ] Offer a downloadable TSV/CSV error report if it can be implemented
+      without retaining uploaded personal/sensitive data beyond the current
+      session lifecycle.
+- [ ] Enable `enforce` only for field-sample uploads in development after
+      shadow-mode parity is demonstrated.
+- [ ] Add Flask test-client tests for the new report rendering, but keep most
+      rule coverage at the pure unit-test level.
+- [ ] Obtain user acceptance from field-sample uploaders using non-production
+      test data.
+
+Exit criterion: an invalid dev upload receives a complete actionable report
+and performs no insert; a valid dev upload follows the current confirmation and
+insert flow successfully.
+
+
+Phase 6 — parity, observability, and controlled adoption
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: demonstrate that preflight improves feedback without creating a second,
+contradictory rule system.
+
+- [ ] Build a rule-parity matrix mapping each implemented Python rule to its
+      PostgreSQL constraint/foreign key/trigger/function source.
+- [ ] For every parity rule, test one valid and one invalid case against
+      SMDB-dev's actual database behavior.
+- [ ] Record expected differences, including database-only concurrency and
+      cross-table conditions.
+- [ ] Add structured logging for unexpected preflight failures without logging
+      full uploaded rows or secrets.
+- [ ] Measure: number of preflight errors per upload, legacy database errors
+      reached after preflight, and false-positive reports.
+- [ ] Keep preflight disabled or shadow-only in production until development
+      parity and user acceptance are recorded.
+
+Exit criterion: preflight is proven reliable for the chosen field-sample rules
+and produces no known false acceptance of data that PostgreSQL rejects.
+
+
+Phase 7 — route extraction and legacy retirement (separate approval)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Goal: reduce `app.py` only after behavior-equivalent services and tests exist.
+
+- [ ] Move the relevant upload endpoints to `routes/uploads.py` one route at a
+      time, preserving URLs, methods, template context, and response behavior.
+- [ ] Register the blueprint/application routes from `app.py` without changing
+      unrelated routes.
+- [ ] Maintain an explicit before/after route test for every moved endpoint.
+- [ ] Remove a legacy helper only after its replacement is in production use,
+      covered by tests, and approved for removal.
+- [ ] Do not begin this phase merely because the new structure exists; require
+      an explicit follow-up decision.
+
+Exit criterion: route extraction is behavior-equivalent, reviewed, and legacy
+code removal has been separately authorized.
+
+
+8. Test strategy
+----------------
+
+Unit tests (fast, no network/database):
+
+- Validation models and report formatting.
+- Each field-sample rule with valid/invalid/boundary/blank inputs.
+- Multi-error aggregation across columns and rows.
+- Reference-provider fake behavior, including lookup failures.
+- Upload-workflow orchestration with synthetic parsed input.
+
+Integration tests (SMDB-dev only):
+
+- Reference-data provider queries against the configured read role.
+- A valid synthetic field-sample upload through the current parser and write
+  workflow.
+- Invalid synthetic sheets proving preflight and PostgreSQL agree on the rule
+  category.
+- Cleanup assertions that invalid preflight runs write zero rows.
+- Explicit cleanup only for fixture IDs/upload UUIDs created by the test.
+
+Route tests (Flask test client):
+
+- Upload form receives/report displays preflight errors.
+- Valid input continues to confirmation.
+- Preflight failures do not invoke the write connection.
+- Existing legacy endpoints retain their current behavior while not yet moved.
+
+Regression corpus:
+
+- Convert the lessons from bug reports into synthetic, minimal fixtures:
+  feature/function class length, age order, depth combinations, environmental
+  context case/pairing, water depth, template version, and field-control values.
+- Never commit the original reporter uploads if they contain real sample,
+  location, person, or project data.
+
+
+9. Completion criteria for the first release
+--------------------------------------------
+
+- [ ] Phase 0 through Phase 6 exit criteria are met for field-sample uploads.
+- [ ] The new preflight returns multiple actionable errors in one response.
+- [ ] Valid field-sample uploads still complete through the legacy write path.
+- [ ] PostgreSQL remains the final enforcement layer and catches any race,
+      direct-SQL, or unimplemented rule violation.
+- [ ] Unit, integration, and route tests are documented and runnable.
+- [ ] No legacy upload behavior has been removed without explicit approval.
+
+
+10. Deferred decisions
+----------------------
+
+- Whether preflight rules should eventually be generated from database metadata
+  or continue as deliberately mirrored, tested Python rules.
+- Whether the long-term architecture should use staging tables for set-based
+  database validation.
+- Whether new upload APIs or a redesigned frontend are needed after the Flask
+  route extraction has proven its value.
+- Authentication, authorization, asynchronous email, and production WSGI
+  deployment improvements.
+
