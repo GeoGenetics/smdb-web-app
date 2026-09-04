@@ -168,18 +168,18 @@ Phase 1 — establish test execution and fixtures
 Goal: make new code easy to test and create a reliable baseline for later
 refactoring.
 
-- [ ] Document one standard command for the existing and new `unittest` suite,
+- [x] Document one standard command for the existing and new `unittest` suite,
       for example `python -m unittest discover -s tests`.
-- [ ] Ensure tests can import pure validation modules without importing
+- [x] Ensure tests can import pure validation modules without importing
       `app.py`, opening a database connection, or requiring an SSH tunnel.
-- [ ] Add small synthetic row dictionaries/dataframes for valid and invalid
+- [x] Add small synthetic row dictionaries/dataframes for valid and invalid
       field-sample cases. Do not use production-derived upload rows as unit
       fixtures.
-- [ ] Add fixture builders for common valid reference data and for missing or
+- [x] Add fixture builders for common valid reference data and for missing or
       unavailable reference data.
-- [ ] Mark or repair the existing placeholder upload test only when it can be
+- [x] Mark or repair the existing placeholder upload test only when it can be
       made deterministic; do not count it as coverage before then.
-- [ ] Add a test-run section to the web-app README and a developer-only test
+- [x] Add a test-run section to the web-app README and a developer-only test
       dependency only if one becomes necessary. `unittest` requires none.
 
 Exit criterion: a documented local test command runs pure unit tests reliably

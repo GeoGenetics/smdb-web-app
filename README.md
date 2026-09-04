@@ -32,3 +32,29 @@ the variable) when email delivery is required.
 `SMDB_DB_USER` configures one role for both reads and writes. Alternatively,
 set `SMDB_DB_READ_USER` and `SMDB_DB_WRITE_USER` (and their corresponding
 password variables) when separate roles are available.
+
+## Tests
+
+Run the test suite from the repository root after activating the virtual
+environment and loading the development configuration. The current legacy
+parser imports database configuration, so the SSH tunnel and `.env` settings
+must be available for the full suite.
+
+```bash
+source .venv/bin/activate
+set -a
+source .env
+set +a
+
+python -m unittest discover -s tests -t . -p '*.py'
+```
+
+New preflight-validation tests must remain independently runnable without a
+web server, database connection, SSH tunnel, or `.env` file:
+
+```bash
+python -m unittest discover -s tests/validation -p 'test_*.py'
+```
+
+The project currently uses only Python's standard-library `unittest`; no
+developer-only test dependency is required.
