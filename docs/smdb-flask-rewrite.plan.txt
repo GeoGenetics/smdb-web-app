@@ -197,12 +197,12 @@ Goal: provide the shared primitives used by all future preflight rules.
       serialization.
 - [x] Implement a narrow `ReferenceDataProvider` interface in
       `validation/reference_data.py`.
-- [ ] Implement a production provider using the existing read-only database
+- [x] Implement a production provider using the existing read-only database
       configuration; use parameterized SQL and explicit schema/table queries.
-- [ ] Implement an in-memory fake provider for unit tests.
-- [ ] Define bounded request/workflow-level caching only; do not create a
+- [x] Implement an in-memory fake provider for unit tests.
+- [x] Define bounded request/workflow-level caching only; do not create a
       process-lifetime cache that becomes stale after allowed-value updates.
-- [ ] Define a predictable validation error for reference-data lookup failure;
+- [x] Define a predictable validation error for reference-data lookup failure;
       never silently treat unavailable reference data as valid.
 
 Exit criterion: field-sample validation can consume reference data through an
