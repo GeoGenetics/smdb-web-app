@@ -147,15 +147,15 @@ Phase 0 — create the additive structure
 
 Goal: establish empty, import-safe boundaries with zero behavioral change.
 
-- [ ] Create the `services/`, `validation/`, and `routes/` packages and the
+- [x] Create the `services/`, `validation/`, and `routes/` packages and the
       files listed in section 5.
-- [ ] Add module docstrings that state each module's responsibility and its
+- [x] Add module docstrings that state each module's responsibility and its
       prohibition on Flask globals in service/validation modules.
-- [ ] Create the test-package directories and a smoke test proving the new
+- [x] Create the test-package directories and a smoke test proving the new
       modules import without starting Flask or connecting to PostgreSQL.
-- [ ] Confirm current app startup and the existing date-parser test behave as
+- [x] Confirm current app startup and the existing date-parser test behave as
       before the scaffolding change.
-- [ ] Commit Phase 0 separately. It must contain no route-registration or
+- [x] Commit Phase 0 separately. It must contain no route-registration or
       upload-flow changes.
 
 Exit criterion: the new directory structure exists, imports cleanly, and the
@@ -400,4 +400,3 @@ Regression corpus:
   route extraction has proven its value.
 - Authentication, authorization, asynchronous email, and production WSGI
   deployment improvements.
-
