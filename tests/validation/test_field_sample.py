@@ -6,8 +6,11 @@ from tests.validation.fixtures import common_reference_data, field_sample_row
 from validation.field_sample import (
     RULE_AGE_INTERVAL_ORDER,
     RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID,
+    RULE_FILTER_SAMPLING_NO_DEPTH,
     RULE_FIELD_CONTROL_NOT_ALLOWED,
+    RULE_INTERVAL_DEPTH_ONLY,
     RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED,
+    RULE_DISCRETE_DEPTH_ONLY,
     RULE_TEMPLATE_VERSION_REQUIRED,
     RULE_WATER_DEPTH_REQUIRED,
     validate_field_sample_rows,
@@ -190,11 +193,110 @@ class FieldSampleValidationTest(unittest.TestCase):
         )
         self.assertEqual([error.template_row for error in report.errors], [11, 12, 13])
 
+    def test_interval_methods_require_complete_interval_depth_only(self):
+        report = self.validate(
+            field_sample_row(
+                primary_sampling_method="Coring",
+                field_sampling_depth_discrete=None,
+                field_sampling_interval_from=0.0,
+                field_sampling_interval_to=10.0,
+            ),
+            field_sample_row(
+                __template_row__=12,
+                primary_sampling_method="Bulk sampling",
+                field_sampling_depth_discrete=5.0,
+                field_sampling_interval_from=None,
+                field_sampling_interval_to=None,
+            ),
+            field_sample_row(
+                __template_row__=13,
+                primary_sampling_method="Monolith sampling",
+                field_sampling_depth_discrete=None,
+                field_sampling_interval_from=" ",
+                field_sampling_interval_to=10.0,
+            ),
+        )
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [RULE_INTERVAL_DEPTH_ONLY, RULE_INTERVAL_DEPTH_ONLY],
+        )
+        self.assertEqual([error.template_row for error in report.errors], [12, 13])
+
+    def test_discrete_methods_require_discrete_depth_only(self):
+        report = self.validate(
+            field_sample_row(),
+            field_sample_row(
+                __template_row__=12,
+                primary_sampling_method="Syringe sampling",
+                field_sampling_depth_discrete=None,
+                field_sampling_interval_from=0.0,
+                field_sampling_interval_to=10.0,
+            ),
+            field_sample_row(
+                __template_row__=13,
+                primary_sampling_method="Column sampling",
+                field_sampling_depth_discrete=" ",
+            ),
+        )
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [RULE_DISCRETE_DEPTH_ONLY, RULE_DISCRETE_DEPTH_ONLY],
+        )
+        self.assertEqual([error.template_row for error in report.errors], [12, 13])
+
+    def test_filter_sampling_requires_all_depth_fields_to_be_blank(self):
+        report = self.validate(
+            field_sample_row(
+                primary_sampling_method="Filter sampling",
+                field_sampling_depth_discrete=None,
+            ),
+            field_sample_row(
+                __template_row__=12,
+                primary_sampling_method="Filter sampling",
+                field_sampling_depth_discrete=1.0,
+            ),
+            field_sample_row(
+                __template_row__=13,
+                primary_sampling_method="Filter sampling",
+                field_sampling_depth_discrete=None,
+                field_sampling_interval_from=0.0,
+                field_sampling_interval_to=None,
+            ),
+        )
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [RULE_FILTER_SAMPLING_NO_DEPTH, RULE_FILTER_SAMPLING_NO_DEPTH],
+        )
+        self.assertEqual([error.template_row for error in report.errors], [12, 13])
+
+    def test_approved_uncategorized_methods_receive_no_category_error(self):
+        report = self.validate(
+            field_sample_row(
+                primary_sampling_method='Other (specify in "Other values" column)',
+                field_sampling_interval_from=0.0,
+                field_sampling_interval_to=10.0,
+            ),
+            field_sample_row(
+                __template_row__=12,
+                primary_sampling_method="Data not collected",
+                field_sampling_interval_from=0.0,
+                field_sampling_interval_to=10.0,
+            ),
+        )
+
+        self.assertEqual(report.findings, ())
+
     def test_multiple_errors_are_aggregated_and_later_rows_are_still_checked(self):
         report = self.validate(
             field_sample_row(
                 template_version=None,
-                primary_sampling_method="Unknown method",
+                primary_sampling_method="Tube sampling",
+                field_sampling_depth_discrete=None,
+                field_sampling_interval_from=0.0,
+                field_sampling_interval_to=10.0,
                 collected_as_field_control="Maybe",
                 field_sample_age_estimate_oldest=1.0,
                 field_sample_age_estimate_youngest=2.0,
@@ -212,11 +314,11 @@ class FieldSampleValidationTest(unittest.TestCase):
             {error.rule_id for error in report.group_by_row()[11]},
             {
                 RULE_TEMPLATE_VERSION_REQUIRED,
-                RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED,
                 RULE_FIELD_CONTROL_NOT_ALLOWED,
                 RULE_AGE_INTERVAL_ORDER,
                 RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID,
                 RULE_WATER_DEPTH_REQUIRED,
+                RULE_DISCRETE_DEPTH_ONLY,
             },
         )
         self.assertEqual(

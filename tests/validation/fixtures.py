@@ -21,6 +21,12 @@ def common_reference_data():
             {
                 "Tube sampling",
                 "Coring",
+                "Monolith sampling",
+                "Bulk sampling",
+                "Syringe sampling",
+                "Column sampling",
+                "Scraping",
+                "Block sampling",
                 "Filter sampling",
                 "Data not collected",
                 'Other (specify in "Other values" column)',

@@ -21,6 +21,9 @@ TEMPLATE_COLUMNS = {
     "template_version": "Template version",
     "primary_sampling_method": "Primary sampling method",
     "collected_as_field_control": "Collected as field control",
+    "field_sampling_depth_discrete": "Sampling depth (discrete)",
+    "field_sampling_interval_from": "Top depth",
+    "field_sampling_interval_to": "Bottom depth",
     "field_sample_water_depth": "Water depth",
     "field_sample_age_estimate_oldest": "Oldest age estimate",
     "field_sample_age_estimate_youngest": "Youngest age estimate",
@@ -36,6 +39,9 @@ RULE_FIELD_CONTROL_NOT_ALLOWED = "field_sample.collected_as_field_control_not_al
 RULE_AGE_INTERVAL_ORDER = "field_sample.age_interval_order"
 RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID = "field_sample.environment_context_pair_invalid"
 RULE_WATER_DEPTH_REQUIRED = "field_sample.water_depth_required_for_aquatic_context"
+RULE_INTERVAL_DEPTH_ONLY = "field_sample.interval_sampling_method_requires_interval_depth_only"
+RULE_DISCRETE_DEPTH_ONLY = "field_sample.discrete_sampling_method_requires_discrete_depth_only"
+RULE_FILTER_SAMPLING_NO_DEPTH = "field_sample.filter_sampling_method_requires_no_depth"
 
 # These are the two literal categories in
 # uploaded_data.check_water_depth_conditionals(), not a copied allowed-values
@@ -45,6 +51,26 @@ WATER_DEPTH_REQUIRED_BROAD_CONTEXTS = frozenset(
         "Marine biome [ENVO:00000447]",
         "Freshwater biome [ENVO:00000873]",
     }
+)
+
+# These categories mirror the literal arrays in
+# uploaded_data.check_depth_conditionals(). Any other approved method follows
+# the trigger's generic-depth branch, implemented in the next Phase 3 slice.
+INTERVAL_SAMPLING_METHODS = frozenset(
+    {"Monolith sampling", "Coring", "Bulk sampling"}
+)
+DISCRETE_SAMPLING_METHODS = frozenset(
+    {
+        "Tube sampling",
+        "Syringe sampling",
+        "Column sampling",
+        "Scraping",
+        "Block sampling",
+    }
+)
+NO_DEPTH_SAMPLING_METHODS = frozenset({"Filter sampling"})
+UNCATEGORIZED_SAMPLING_METHODS = frozenset(
+    {"Other (specify in \"Other values\" column)", "Data not collected"}
 )
 
 
@@ -230,6 +256,82 @@ def _validate_water_depth_requirement(
     )
 
 
+def _validate_sampling_method_depth_category(
+    row: Mapping[str, Any],
+    report: ValidationReport,
+) -> None:
+    """Apply the trigger's interval, discrete, and no-depth category rules.
+
+    Approved methods outside those fixed database arrays deliberately produce
+    no category finding here. They are handled by the generic depth rules in a
+    later Phase 3 checkpoint.
+    """
+    method = row.get("primary_sampling_method")
+    discrete_depth = row.get("field_sampling_depth_discrete")
+    interval_from = row.get("field_sampling_interval_from")
+    interval_to = row.get("field_sampling_interval_to")
+    has_discrete_depth = not _is_blank(discrete_depth)
+    has_interval_from = not _is_blank(interval_from)
+    has_interval_to = not _is_blank(interval_to)
+
+    if method in INTERVAL_SAMPLING_METHODS:
+        if not (not has_discrete_depth and has_interval_from and has_interval_to):
+            report.add(
+                ValidationError(
+                    rule_id=RULE_INTERVAL_DEPTH_ONLY,
+                    message=(
+                        f"Samples collected using {method} must have interval depth "
+                        "and interval depth only."
+                    ),
+                    template_row=_template_row(row),
+                    template_column=TEMPLATE_COLUMNS["primary_sampling_method"],
+                    database_column="primary_sampling_method",
+                    value=method,
+                )
+            )
+        return
+
+    if method in DISCRETE_SAMPLING_METHODS:
+        if not (has_discrete_depth and not has_interval_from and not has_interval_to):
+            report.add(
+                ValidationError(
+                    rule_id=RULE_DISCRETE_DEPTH_ONLY,
+                    message=(
+                        f"Samples collected using {method} must have discrete depth "
+                        "and discrete depth only."
+                    ),
+                    template_row=_template_row(row),
+                    template_column=TEMPLATE_COLUMNS["primary_sampling_method"],
+                    database_column="primary_sampling_method",
+                    value=method,
+                )
+            )
+        return
+
+    if method in NO_DEPTH_SAMPLING_METHODS and (
+        has_discrete_depth or has_interval_from or has_interval_to
+    ):
+        report.add(
+            ValidationError(
+                rule_id=RULE_FILTER_SAMPLING_NO_DEPTH,
+                message=(
+                    f"Samples collected using {method} cannot have a depth. "
+                    "Use water depth and/or elevation instead."
+                ),
+                template_row=_template_row(row),
+                template_column=TEMPLATE_COLUMNS["primary_sampling_method"],
+                database_column="primary_sampling_method",
+                value=method,
+            )
+        )
+        return
+
+    if method in UNCATEGORIZED_SAMPLING_METHODS:
+        # Explicitly preserve the production fix for Other and Data not
+        # collected: neither receives an "unknown method" category error.
+        return
+
+
 def validate_field_sample_rows(
     rows: Iterable[Mapping[str, Any]],
     reference_data: ReferenceDataProvider,
@@ -249,4 +351,5 @@ def validate_field_sample_rows(
         _validate_age_interval(row, report)
         _validate_environment_context_pair(row, report, reference_data)
         _validate_water_depth_requirement(row, report)
+        _validate_sampling_method_depth_category(row, report)
     return report

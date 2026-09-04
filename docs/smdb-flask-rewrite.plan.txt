@@ -223,12 +223,12 @@ real bug reports and uploads:
 - [x] broad/local environmental-context pair compatibility;
 - [x] water depth required for marine/freshwater broad contexts;
 - [x] primary sampling method membership;
-- [ ] special sampling categories:
-  - interval methods require interval depth only;
-  - discrete methods require discrete depth only;
-  - filter sampling requires no depth;
-  - approved uncategorized methods, including `Other` and `Data not collected`,
-    receive generic depth validation;
+- [x] special sampling categories:
+  - [x] interval methods require interval depth only;
+  - [x] discrete methods require discrete depth only;
+  - [x] filter sampling requires no depth;
+  - [x] approved uncategorized methods, including `Other` and `Data not collected`,
+    are passed through to generic depth validation;
 - [ ] generic depth rules: one depth when required, mutually exclusive discrete
       and interval depth, paired interval endpoints, ascending interval, and
       depth inference consistency;
@@ -245,7 +245,7 @@ For every rule:
 - [ ] document any intentional difference from a database trigger before
       merging it.
 
-For the six completed rules above, stable identifiers, terminology/parity,
+For the special-category rules and the six previously completed rules, stable identifiers, terminology/parity,
 valid/invalid/null-or-blank/multi-row coverage, aggregation coverage, and
 intentional differences are recorded in
 `docs/field-sample-preflight-parity.md`. The remaining checklist applies to
