@@ -238,19 +238,19 @@ real bug reports and uploads:
 
 For every rule:
 
-- [ ] assign a stable rule identifier;
-- [ ] preserve the database rule's semantics and terminology;
-- [ ] write valid, invalid, null/blank, and multi-row tests;
-- [ ] test that multiple independent errors are returned together;
-- [ ] test that a row does not prevent unrelated rows from being validated;
-- [ ] document any intentional difference from a database trigger before
+- [x] assign a stable rule identifier;
+- [x] preserve the database rule's semantics and terminology;
+- [x] write valid, invalid, null/blank, and multi-row tests;
+- [x] test that multiple independent errors are returned together;
+- [x] test that a row does not prevent unrelated rows from being validated;
+- [x] document any intentional difference from a database trigger before
       merging it.
 
 For the completed initial rule set, stable identifiers, terminology/parity,
 valid/invalid/null-or-blank/multi-row coverage, aggregation coverage, and
 intentional differences are recorded in
-`docs/field-sample-preflight-parity.md`. The remaining checklist applies to
-each later Phase 3 rule before it is marked complete.
+`docs/field-sample-preflight-parity.md`. Any future Phase 3 rule added to this
+scope must satisfy the same checklist before it is marked complete.
 
 Exit criterion: a synthetic multi-row field-sample input produces a
 deterministic report containing all applicable errors, with no database write.
