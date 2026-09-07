@@ -73,6 +73,12 @@ Explicitly out of scope initially:
 - Existing tests use Python's `unittest`. Preserve that standard for the new
   code rather than introduce a test-framework migration.
 - `tests/date_parser_test.py` is a useful parser-level test.
+- Known limitation: `tests/date_parser_test.py` currently imports
+  `utils.parsers`, whose module-level legacy database imports open PostgreSQL
+  connections before the pure `parse_dates()` function can run. Consequently,
+  the full discovery command can fail when SMDB-dev or its tunnel is not
+  available. Tolerate this temporarily; later move database-only imports into
+  the legacy `parse()` function so parser-only tests do not require a database.
 - `unit_tests/upload_tests.py` contains placeholder paths and imports `app` at
   module import time; treat it as a future repair target, not as reliable
   coverage.
@@ -262,12 +268,12 @@ Phase 4 — upload workflow service and shadow mode
 Goal: connect parsing, reference lookup, and validation without changing what
 the user sees or whether the legacy route writes data.
 
-- [ ] Implement `services/upload_workflow.py` with explicit inputs and outputs:
-  parsed sheet(s), table type, parser options, reference provider, and report.
-- [ ] Keep Flask `request`, `session`, `flash`, `redirect`, and template
+- [x] Implement `services/upload_workflow.py` with explicit inputs and outputs:
+      parsed sheet(s), table type, parser options, reference provider, and report.
+- [x] Keep Flask `request`, `session`, `flash`, `redirect`, and template
       rendering out of this service.
-- [ ] Reuse the current parser output; do not rewrite parsing in this phase.
-- [ ] Add a configuration flag such as `SMDB_PREFLIGHT_MODE=off|shadow|enforce`.
+- [x] Reuse the current parser output; do not rewrite parsing in this phase.
+- [x] Add a configuration flag such as `SMDB_PREFLIGHT_MODE=off|shadow|enforce`.
   Default to `off`; use `shadow` only in development first.
 - [ ] In shadow mode, run preflight and log/report its result internally while
       preserving the current legacy upload behavior exactly.

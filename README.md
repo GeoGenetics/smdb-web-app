@@ -29,6 +29,13 @@ and administrative emails without changing the uploader recorded in the
 database. Configure a working mail transport and set it to `false` (or remove
 the variable) when email delivery is required.
 
+`SMDB_PREFLIGHT_MODE` controls the additive upload-preflight rollout. It
+defaults to `off`, which preserves the legacy upload behavior. The supported
+values are `off`, `shadow`, and `enforce`; non-`off` modes are currently
+permitted only with `RUN_MODE=development`. The flag is intentionally not yet
+wired into `app.py`; a later Phase 4 step will introduce development shadow
+mode without changing the user-visible legacy upload flow.
+
 `SMDB_DB_USER` configures one role for both reads and writes. Alternatively,
 set `SMDB_DB_READ_USER` and `SMDB_DB_WRITE_USER` (and their corresponding
 password variables) when separate roles are available.
