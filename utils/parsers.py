@@ -220,7 +220,15 @@ def parse_dates(sheet, date_columns, date_format, soft=False):
 
 def _nonblank_numeric_values(values):
     """Return values that should be parsed rather than treated as blank cells."""
-    return values.notna() & values.astype(str).str.strip().ne("")
+    text_values = values.astype(str).str.strip()
+    # ``float('nan')`` was accepted by the legacy conversion. Retain that
+    # treatment for optional numeric cells, including after ``astype(str)``
+    # turns a pandas NaN into the text token ``nan``.
+    return (
+        values.notna()
+        & text_values.ne("")
+        & text_values.str.casefold().ne("nan")
+    )
 
 
 def _source_rows_for_indices(indices, source_row_numbers):
@@ -320,6 +328,11 @@ def parse_floats(
     
     for ele in float_columns:
         if ele in sheet.columns:
+            # Some locale-normalization paths use ``astype(str)`` below.
+            # Preserve the original blank cells first, otherwise pandas NaN
+            # becomes the literal string "nan" and looks like bad user input
+            # during the final conversion.
+            blank_mask = ~_nonblank_numeric_values(sheet[ele])
         
             # Checks for inconsistencies in data and user input
             match (decimal_point, thousands_seperator):
@@ -429,6 +442,9 @@ def parse_floats(
                 
                 case _:
                     raise Exception(f"case _ reached in {parse_floats.__name__}. Contact database admin.")
+
+            # Restore optional blanks after any string-based normalization.
+            sheet.loc[blank_mask, ele] = np.nan
             
             converted = pd.to_numeric(sheet[ele], errors="coerce")
             invalid_mask = _nonblank_numeric_values(sheet[ele]) & converted.isna()

@@ -48,20 +48,23 @@ class ParseFloatsDiagnosticsTest(unittest.TestCase):
             )
 
     def test_allows_blank_optional_values(self):
-        sheet = pd.DataFrame({"latitude": ["51.654374", None, ""]})
-        source_rows = pd.Series([11, 12, 13], index=sheet.index)
+        # This separator configuration takes the legacy ``astype(str)`` path.
+        # It must not turn an optional pandas NaN into invalid text "nan".
+        sheet = pd.DataFrame({"latitude": ["1.234,5", None, "", "nan"]})
+        source_rows = pd.Series([11, 12, 13, 14], index=sheet.index)
 
         parsed = self.parsers.parse_floats(
             sheet,
             ["latitude"],
-            decimal_point=".",
-            thousands_seperator="not_relevant",
+            decimal_point=",",
+            thousands_seperator=".",
             source_row_numbers=source_rows,
         )
 
-        self.assertEqual(parsed["latitude"].iloc[0], 51.654374)
+        self.assertEqual(parsed["latitude"].iloc[0], 1234.5)
         self.assertTrue(pd.isna(parsed["latitude"].iloc[1]))
         self.assertTrue(pd.isna(parsed["latitude"].iloc[2]))
+        self.assertTrue(pd.isna(parsed["latitude"].iloc[3]))
 
     def test_normalizes_selected_thousands_and_decimal_separators(self):
         sheet = pd.DataFrame({"depth": ["1.234,5"]})
