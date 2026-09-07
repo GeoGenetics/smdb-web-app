@@ -87,6 +87,13 @@ Explicitly out of scope initially:
   (404), as unknown critical application failures and redirects to the upload
   error page. Repair this separately by allowing `HTTPException` responses to
   pass through normally before handling genuine unexpected exceptions.
+- Known portability flaw: `constants/misc_constants.py` derives the shared
+  data root from the operating system (`N:\` on Windows and `/mnt` otherwise).
+  The active web-app paths use it to list/download standard templates and
+  manuals; the field-sample project/sample directory path is currently dormant
+  because its caller is commented out. Replace this OS assumption with a
+  validated setting such as `SMDB_SHARED_DATA_ROOT`, including a documented
+  local-development fallback, in a separate configuration-maintenance change.
 - SMDB-dev, dedicated application roles, and a tunnel-based local web-app
   setup already exist and are the integration-test environment.
 
