@@ -466,6 +466,11 @@ def upload_file():
             
             for i, sheet in enumerate(sheets_to_parse):
                 sheet = sheet.dropna(how='all', axis='index')
+                # Pandas consumes the delimited-file header as row one. Keep
+                # physical source rows outside the sheet so parser diagnostics
+                # can identify the uploader's spreadsheet row without adding a
+                # non-database column to a later to_sql() call.
+                source_row_numbers = pd.Series(sheet.index + 2, index=sheet.index)
                 split_database_table_name = db_table_related_constants.DBTableRelated.TABLE_SPLITTER[database_table_name][i]
                 
                 sheet_to_db_col_name_map = sheet_to_db_rename_map(schema_name=SQL_ALCH_CONFIG['schema_name'], table_name=split_database_table_name)
@@ -480,7 +485,9 @@ def upload_file():
                 if split_database_table_name == data.field_sample():
                     # Reset the header using row 9, then drop all spec rows above and the instruction row
                     sheet.columns = sheet.iloc[8]
-                    sheet = sheet.iloc[9:].reset_index(drop=True)
+                    sheet = sheet.iloc[9:].copy()
+                    source_row_numbers = source_row_numbers.loc[sheet.index].reset_index(drop=True)
+                    sheet = sheet.reset_index(drop=True)
                     sheet = sheet.drop(columns=sheet.columns[0])
                     template_version = sheet[data.field_sample.template_version(template=True)].iloc[0]
                     
@@ -495,7 +502,8 @@ def upload_file():
                                             date_format=date_format,
                                             decimal_point=decimal_point,
                                             thousands_seperator=thousands_seperator,
-                                            engine=ENGINE_READ_ONLY)
+                                            engine=ENGINE_READ_ONLY,
+                                            source_row_numbers=source_row_numbers)
                        
                 # clean_sheet.columns = clean_sheet.columns.str.strip()
                 # clean_sheet = clean_sheet.rename(columns=sheet_to_db_col_name_map, errors="raise")     

@@ -81,7 +81,8 @@ set +a
 SMDB_RUN_INTEGRATION_TESTS=1 \
   python -m unittest \
     tests.integration.test_upload_preflight_smdb_dev \
-    tests.integration.test_preflight_report_rendering
+    tests.integration.test_preflight_report_rendering \
+    tests.integration.test_parse_floats_diagnostics
 ```
 
 Field-sample uploader acceptance is a separate human step; follow

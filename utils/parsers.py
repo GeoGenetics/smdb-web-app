@@ -11,7 +11,8 @@ def parse(sheet,
           date_format, 
           database_table_name, 
           decimal_point, 
-          thousands_seperator, engine):
+          thousands_seperator, engine,
+          source_row_numbers=None):
     
     database_name = constants.db_connections.SQL_ALCH_CONFIG["database"]
     schema_name = constants.db_connections.SQL_ALCH_CONFIG["schema_name"]
@@ -46,6 +47,8 @@ def parse(sheet,
     
     if not constants.db_connections.RUN_MODE == 'production':
         sheet = sheet.dropna(axis='index', how='all')
+        if source_row_numbers is not None:
+            source_row_numbers = source_row_numbers.reindex(sheet.index)
 
     # check for expected cols
     expected_columns = pd.read_sql(sql=f"SELECT * from {schema_name}.{database_table_name}", con=constants.db_connections.ENGINE).columns
@@ -113,7 +116,13 @@ def parse(sheet,
         raise Exception("Empty rows are not allowed. Make sure to delete any empty rows before uploading.")
     
     sheet = parse_dates(sheet, date_columns=date_columns, date_format=date_format)       
-    sheet = parse_floats(sheet, float_columns, decimal_point, thousands_seperator)
+    sheet = parse_floats(
+        sheet,
+        float_columns,
+        decimal_point,
+        thousands_seperator,
+        source_row_numbers=source_row_numbers,
+    )
     sheet = validate_integers(sheet, int_columns, thousands_seperator)
     sheet = parse_booleans(sheet, bool_columns)
     # sheet = parse_booleans(sheet, boolean_columns)
@@ -209,9 +218,67 @@ def parse_dates(sheet, date_columns, date_format, soft=False):
      
     return sheet
 
+def _nonblank_numeric_values(values):
+    """Return values that should be parsed rather than treated as blank cells."""
+    return values.notna() & values.astype(str).str.strip().ne("")
+
+
+def _source_rows_for_indices(indices, source_row_numbers):
+    """Return bounded user-facing source rows for parser diagnostics."""
+    rows = []
+    for index in indices[:10]:
+        if source_row_numbers is not None and index in source_row_numbers.index:
+            row = source_row_numbers.loc[index]
+        else:
+            # Generic delimited sheets use row one for their header.
+            row = index + 2 if isinstance(index, (int, np.integer)) else index
+        rows.append(int(row) if isinstance(row, np.integer) else row)
+    return rows
+
+
+def _raise_invalid_numeric_values(
+    *, column, values, invalid_mask, source_row_numbers, reason
+):
+    """Raise an actionable error without exposing an unbounded sheet excerpt."""
+    invalid_indices = list(values.index[invalid_mask])
+    source_rows = _source_rows_for_indices(invalid_indices, source_row_numbers)
+    examples = [str(values.loc[index]) for index in invalid_indices[:5]]
+    additional_rows = " among others" if len(invalid_indices) > 10 else ""
+    raise ValueError(
+        f'Invalid numeric value(s) in column "{column}" at spreadsheet row(s) '
+        f"{source_rows}{additional_rows}. Example value(s): {examples}. {reason}"
+    )
+
+
+def _validate_float_pattern(
+    *, column, values, allowed_pattern, source_row_numbers, decimal_point,
+    thousands_seperator,
+):
+    """Validate nonblank values against one selected numeric-format pattern."""
+    nonblank = _nonblank_numeric_values(values)
+    matches = values.apply(
+        lambda value: bool(allowed_pattern.fullmatch(str(value)))
+    )
+    invalid_mask = nonblank & ~matches
+    if invalid_mask.any():
+        _raise_invalid_numeric_values(
+            column=column,
+            values=values,
+            invalid_mask=invalid_mask,
+            source_row_numbers=source_row_numbers,
+            reason=(
+                "Check the selected decimal-point "
+                f"({decimal_point}) and thousands-separator ({thousands_seperator}) options."
+            ),
+        )
+
+
 #TODO: What if not_relevant?
-# Converts to float and throws error if string is not a float (for example if it contains thousands seperators)
-def parse_floats(sheet, float_columns, decimal_point, thousands_seperator):
+# Converts to float and reports invalid strings with column and source-row context.
+def parse_floats(
+    sheet, float_columns, decimal_point, thousands_seperator,
+    source_row_numbers=None,
+):
     
     '''
     Parses numeric data based on user input (decimal_point, thousands_seperator). Thousands seperator gets removed
@@ -259,8 +326,12 @@ def parse_floats(sheet, float_columns, decimal_point, thousands_seperator):
             
                 case ("not_relevant", ","):
                     allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d{0,2}(?:,\d{3})+)|(?:[1-9]\d*)|0)$')
-                    all_match = sheet[ele].apply(lambda x: allowed_pattern.fullmatch(str(x))).all()
-                    assert all_match, f'Some numerical values in {ele} are invalid. Did you pick the correct thousand- and decimal seperator options?'
+                    _validate_float_pattern(
+                        column=ele, values=sheet[ele], allowed_pattern=allowed_pattern,
+                        source_row_numbers=source_row_numbers,
+                        decimal_point=decimal_point,
+                        thousands_seperator=thousands_seperator,
+                    )
                     
                     bad_rows = sheet[ele].apply(str).str.contains(".", regex=False)
                     if bad_rows.any():
@@ -272,9 +343,13 @@ def parse_floats(sheet, float_columns, decimal_point, thousands_seperator):
                         sheet[ele] = sheet[ele].astype(str).str.replace(thousands_seperator, "", regex=False)
                         
                 case (",", "not_relevant"):
-                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d*)|0)(?:,\d*[1-9])?$')
-                    all_match = sheet[ele].apply(lambda x: allowed_pattern.fullmatch(str(x))).all()
-                    assert all_match, f'Some numerical values in {ele} are invalid. Did you pick the correct thousand- and decimal seperator options?'
+                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d*)|0)(?:,\d+)?$')
+                    _validate_float_pattern(
+                        column=ele, values=sheet[ele], allowed_pattern=allowed_pattern,
+                        source_row_numbers=source_row_numbers,
+                        decimal_point=decimal_point,
+                        thousands_seperator=thousands_seperator,
+                    )
                     
                     bad_rows = sheet[ele].apply(str).str.contains(".", regex=False)
                     if bad_rows.any():
@@ -284,9 +359,13 @@ def parse_floats(sheet, float_columns, decimal_point, thousands_seperator):
                         sheet[ele] = sheet[ele].astype(str).str.replace(decimal_point, ".", regex=False)
                         
                 case (".", "not_relevant"):
-                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d*)|0)(?:\.\d*[1-9])?$')
-                    all_match = sheet[ele].apply(lambda x: allowed_pattern.fullmatch(str(x))).all()
-                    assert all_match, f'Some numerical values in {ele} are invalid. Did you pick the correct thousand- and decimal seperator options?'
+                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d*)|0)(?:\.\d+)?$')
+                    _validate_float_pattern(
+                        column=ele, values=sheet[ele], allowed_pattern=allowed_pattern,
+                        source_row_numbers=source_row_numbers,
+                        decimal_point=decimal_point,
+                        thousands_seperator=thousands_seperator,
+                    )
                     
                     bad_rows = sheet[ele].apply(str).str.contains(",", regex=False)
                     if bad_rows.any():
@@ -295,8 +374,12 @@ def parse_floats(sheet, float_columns, decimal_point, thousands_seperator):
                     
                 case ("not_relevant", "."):
                     allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d{0,2}(?:\.\d{3})+)|(?:[1-9]\d*)|0)$')
-                    all_match = sheet[ele].apply(lambda x: allowed_pattern.fullmatch(str(x))).all()
-                    assert all_match, f'Some numerical values in {ele} are invalid. Did you pick the correct thousand- and decimal seperator options?'
+                    _validate_float_pattern(
+                        column=ele, values=sheet[ele], allowed_pattern=allowed_pattern,
+                        source_row_numbers=source_row_numbers,
+                        decimal_point=decimal_point,
+                        thousands_seperator=thousands_seperator,
+                    )
                     
                     # returns the rows that contains ","
                     bad_rows = sheet[ele].apply(str).str.contains(",", regex=False)
@@ -308,26 +391,38 @@ def parse_floats(sheet, float_columns, decimal_point, thousands_seperator):
 
                 case ("not_relevant", "not_relevant"):
                     allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d*)|0)$')
-                    all_match = sheet[ele].apply(lambda x: allowed_pattern.fullmatch(str(x))).all()
-                    assert all_match, f'Some numerical values in {ele} are invalid. Did you pick the correct thousand- and decimal seperator options?'
+                    _validate_float_pattern(
+                        column=ele, values=sheet[ele], allowed_pattern=allowed_pattern,
+                        source_row_numbers=source_row_numbers,
+                        decimal_point=decimal_point,
+                        thousands_seperator=thousands_seperator,
+                    )
                     
-                    bad_rows = sheet[ele].apply(str).str.contains("\.|,", regex=True)
+                    bad_rows = sheet[ele].apply(str).str.contains(r"\.|,", regex=True)
                     if bad_rows.any():
                         bad_rows_indices = list(sheet[bad_rows].index + 1)
                         raise Exception(error_message(ele, bad_rows_indices, "comma or period"))
                         
                 case (",", "."):
-                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d{0,2}(?:\.\d{3})+)|(?:[1-9]\d*)|0)(?:,\d*[1-9])?$')
-                    all_match = sheet[ele].apply(lambda x: allowed_pattern.fullmatch(str(x))).all()
-                    assert all_match, f'Some numerical values in {ele} are invalid. Did you pick the correct thousand- and decimal seperator options?'
+                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d{0,2}(?:\.\d{3})+)|(?:[1-9]\d*)|0)(?:,\d+)?$')
+                    _validate_float_pattern(
+                        column=ele, values=sheet[ele], allowed_pattern=allowed_pattern,
+                        source_row_numbers=source_row_numbers,
+                        decimal_point=decimal_point,
+                        thousands_seperator=thousands_seperator,
+                    )
                     
                     sheet[ele] = sheet[ele].astype(str).str.replace(thousands_seperator, "", regex=False)
                     sheet[ele] = sheet[ele].astype(str).str.replace(decimal_point, ".", regex=False)
                         
                 case (".", ","):
-                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d{0,2}(?:,\d{3})+)|(?:[1-9]\d*)|0)(?:\.\d*[1-9])?$')
-                    all_match = sheet[ele].apply(lambda x: allowed_pattern.fullmatch(str(x))).all()
-                    assert all_match, f'Some numerical values in {ele} are invalid. Did you pick the correct thousand- and decimal seperators?'
+                    allowed_pattern = re.compile(r'^-?(?:(?:[1-9]\d{0,2}(?:,\d{3})+)|(?:[1-9]\d*)|0)(?:\.\d+)?$')
+                    _validate_float_pattern(
+                        column=ele, values=sheet[ele], allowed_pattern=allowed_pattern,
+                        source_row_numbers=source_row_numbers,
+                        decimal_point=decimal_point,
+                        thousands_seperator=thousands_seperator,
+                    )
                     
                     sheet[ele] = sheet[ele].astype(str).str.replace(thousands_seperator, "", regex=False)
                     
@@ -335,7 +430,17 @@ def parse_floats(sheet, float_columns, decimal_point, thousands_seperator):
                 case _:
                     raise Exception(f"case _ reached in {parse_floats.__name__}. Contact database admin.")
             
-            sheet[ele] = sheet[ele].astype('float64')
+            converted = pd.to_numeric(sheet[ele], errors="coerce")
+            invalid_mask = _nonblank_numeric_values(sheet[ele]) & converted.isna()
+            if invalid_mask.any():
+                _raise_invalid_numeric_values(
+                    column=ele,
+                    values=sheet[ele],
+                    invalid_mask=invalid_mask,
+                    source_row_numbers=source_row_numbers,
+                    reason="The value cannot be converted to a floating-point number.",
+                )
+            sheet[ele] = converted.astype("float64")
             
 
     return sheet
@@ -384,4 +489,3 @@ def parse_booleans(sheet, boolean_columns):
         
     
     return sheet
-
