@@ -48,6 +48,13 @@ import decorators
 from datetime import datetime
 import uuid
 from geopy.distance import geodesic
+from services.preflight_mode import PreflightMode, preflight_mode_from_environment
+from services.upload_workflow import UploadPreflightRequest, run_upload_preflight
+from validation.reference_data import (
+    PostgresReferenceDataProvider,
+    ReferenceDataLookupError,
+    WorkflowCachedReferenceDataProvider,
+)
 
 lat_lon_warning_path = os.path.join('warnings', 'latlon_warning.html')
 warnings_data_dir = 'warnings'
@@ -70,6 +77,68 @@ logger = log_util.setup()
 
 # # Set log level
 app.logger.setLevel(logging.DEBUG)
+
+
+def run_shadow_upload_preflight(*, clean_sheets, parser_options):
+    """Log a non-blocking preflight summary for one legacy upload attempt.
+
+    This adapter deliberately lives in the Flask application rather than the
+    framework-free workflow service. It receives the legacy parser output,
+    uses a fresh per-upload read-only reference-data cache, and never changes
+    ``clean_sheets`` or raises an error back into the legacy upload path.
+    Finding values are intentionally excluded from logs because uploaded rows
+    can contain personal or otherwise sensitive metadata.
+    """
+    try:
+        mode = preflight_mode_from_environment()
+    except ValueError as error:
+        app.logger.error(
+            "SMDB preflight configuration ignored; legacy upload continues: %s",
+            error,
+        )
+        return
+
+    if mode is not PreflightMode.SHADOW:
+        return
+
+    reference_data = WorkflowCachedReferenceDataProvider(
+        PostgresReferenceDataProvider()
+    )
+    for table_type in clean_sheets:
+        try:
+            result = run_upload_preflight(
+                UploadPreflightRequest(
+                    parsed_sheets=clean_sheets,
+                    table_type=table_type,
+                    parser_options=parser_options,
+                    reference_data=reference_data,
+                )
+            )
+        except ReferenceDataLookupError as error:
+            app.logger.warning(
+                "SMDB preflight shadow lookup failed; legacy upload continues "
+                "(table=%s, lookup=%s)",
+                table_type,
+                error.lookup_name,
+            )
+        except Exception:
+            app.logger.exception(
+                "SMDB preflight shadow failed unexpectedly; legacy upload continues "
+                "(table=%s)",
+                table_type,
+            )
+        else:
+            rule_ids = sorted({finding.rule_id for finding in result.report.findings})
+            app.logger.info(
+                "SMDB preflight shadow report "
+                "(table=%s, applied=%s, rows=%d, errors=%d, warnings=%d, rule_ids=%s)",
+                result.table_type,
+                result.preflight_applied,
+                result.validated_row_count,
+                len(result.report.errors),
+                len(result.report.warnings),
+                ",".join(rule_ids) if rule_ids else "none",
+            )
 
 @app.route('/', methods=['POST', 'GET'])
 @decorators.log_info(app)
@@ -154,6 +223,11 @@ def upload_file():
             send_receipt_to = request.form.get('send_receipt_to')
             session['send_receipt_to'] = send_receipt_to
             session['encoding_user_input'] = encoding_user_input
+            session['parser_options'] = {
+                'date_format': date_format,
+                'decimal_point': decimal_point,
+                'thousands_separator': thousands_seperator,
+            }
             
             if thousands_seperator == "no_choice" or not thousands_seperator:
                 raise DontTriggerFileDeletion('Please select a thousands seperator character')
@@ -888,6 +962,11 @@ def confirmed():
             
             except Exception as e:
                 return general_error_handling(message=e, delete_session_dir=True, revert_db=False, files_to_del=files_to_del['Before Upload'])
+
+        run_shadow_upload_preflight(
+            clean_sheets=clean_sheets,
+            parser_options=session.get('parser_options', {}),
+        )
     
         # Try to upload and rollback if errors happen
         with ENGINE.connect() as conn:
@@ -1796,4 +1875,3 @@ if __name__ == '__main__':
     #         if not arg in production_args + development_args:
     #                 raise Exception(f"Argument {arg} not allowed")
     #     app.run(debug=True)
-

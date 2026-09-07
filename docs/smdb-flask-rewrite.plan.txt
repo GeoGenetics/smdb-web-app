@@ -275,15 +275,21 @@ the user sees or whether the legacy route writes data.
 - [x] Reuse the current parser output; do not rewrite parsing in this phase.
 - [x] Add a configuration flag such as `SMDB_PREFLIGHT_MODE=off|shadow|enforce`.
   Default to `off`; use `shadow` only in development first.
-- [ ] In shadow mode, run preflight and log/report its result internally while
+- [x] In shadow mode, run preflight and log/report its result internally while
       preserving the current legacy upload behavior exactly.
-- [ ] Add tests with a fake provider verifying that workflow orchestration does
+- [x] Add tests with a fake provider verifying that workflow orchestration does
       not write to the database and that report contents reach the caller.
-- [ ] Add integration tests against SMDB-dev for a small synthetic valid sheet
+- [x] Add integration tests against SMDB-dev for a small synthetic valid sheet
       and targeted invalid sheets. Reset only explicitly created fixture rows.
 
 Exit criterion: shadow mode produces preflight results for real dev uploads
 without changing the legacy route's response or database behavior.
+
+Maintenance note: the legacy logger writes plain-text, potentially multi-line
+records and stack traces to `log_file.csv`. This is not CSV and makes normal
+log inspection awkward. Rename it to a `.log` file and document a structured
+logging format in a later maintenance change; do not couple that cleanup to
+the additive preflight rollout.
 
 
 Phase 5 — user-visible preflight report, opt-in

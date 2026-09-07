@@ -32,9 +32,12 @@ the variable) when email delivery is required.
 `SMDB_PREFLIGHT_MODE` controls the additive upload-preflight rollout. It
 defaults to `off`, which preserves the legacy upload behavior. The supported
 values are `off`, `shadow`, and `enforce`; non-`off` modes are currently
-permitted only with `RUN_MODE=development`. The flag is intentionally not yet
-wired into `app.py`; a later Phase 4 step will introduce development shadow
-mode without changing the user-visible legacy upload flow.
+permitted only with `RUN_MODE=development`. In `shadow` mode, a field-sample
+upload runs the new read-only preflight immediately before the existing legacy
+write path and logs only a summary (table, row count, error/warning counts, and
+rule IDs). It never blocks, changes, or reports on the user-visible legacy
+upload flow. `enforce` is reserved for a later phase and currently does not
+block uploads.
 
 `SMDB_DB_USER` configures one role for both reads and writes. Alternatively,
 set `SMDB_DB_READ_USER` and `SMDB_DB_WRITE_USER` (and their corresponding
@@ -61,6 +64,19 @@ web server, database connection, SSH tunnel, or `.env` file:
 
 ```bash
 python -m unittest discover -s tests/validation -p 'test_*.py'
+```
+
+The SMDB-dev preflight integration checks are intentionally opt-in. They use
+real read-only reference-data lookups through the local port-`5433` tunnel and
+assert that a unique synthetic field-sample ID remains absent before and after
+the tests. They never insert, update, or delete database rows.
+
+```bash
+set -a
+source .env
+set +a
+SMDB_RUN_INTEGRATION_TESTS=1 \
+  python -m unittest tests.integration.test_upload_preflight_smdb_dev
 ```
 
 The project currently uses only Python's standard-library `unittest`; no

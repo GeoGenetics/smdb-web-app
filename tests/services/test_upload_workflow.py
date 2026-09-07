@@ -26,6 +26,39 @@ def reference_provider():
     )
 
 
+class RecordingReferenceDataProvider(InMemoryReferenceDataProvider):
+    """Fixture provider that records the read operations requested by a workflow."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.lookup_calls = []
+        self.write_attempts = 0
+
+    def field_sampling_methods(self):
+        self.lookup_calls.append("field_sampling_methods")
+        return super().field_sampling_methods()
+
+    def field_controls(self):
+        self.lookup_calls.append("field_controls")
+        return super().field_controls()
+
+    def depth_inference_methods(self):
+        self.lookup_calls.append("depth_inference_methods")
+        return super().depth_inference_methods()
+
+    def has_environment_context_pair(self, *, local_context, broad_context):
+        self.lookup_calls.append("has_environment_context_pair")
+        return super().has_environment_context_pair(
+            local_context=local_context,
+            broad_context=broad_context,
+        )
+
+    def write(self, *_args, **_kwargs):
+        """A write-capable fake would fail immediately if the workflow used it."""
+        self.write_attempts += 1
+        raise AssertionError("Upload preflight must not write through its provider")
+
+
 class UploadWorkflowImportTest(unittest.TestCase):
     def test_module_imports_without_flask_or_database_access(self):
         from services import upload_workflow
@@ -63,3 +96,53 @@ class UploadWorkflowParserOutputTest(unittest.TestCase):
         self.assertEqual(result.validated_row_count, 1)
         self.assertEqual(result.report.findings, ())
         self.assertEqual(result.parser_options, request.parser_options)
+
+
+class UploadWorkflowOrchestrationTest(unittest.TestCase):
+    def test_returns_aggregate_findings_without_mutating_or_writing_the_sheet(self):
+        """Preflight reads reference values and returns findings to its caller."""
+        data = common_reference_data()
+        provider = RecordingReferenceDataProvider(
+            field_sampling_method_values=data["field_sampling_methods"],
+            field_control_values=data["field_controls"],
+            depth_inference_method_values=data["depth_inference_methods"],
+            environment_context_pairs=data["environment_context_pairs"],
+        )
+        clean_sheet = pd.DataFrame(
+            [
+                field_sample_row(
+                    template_version=None,
+                    primary_sampling_method="Unknown sampling method",
+                    collected_as_field_control="Unknown control",
+                ),
+                field_sample_row(
+                    field_sample_age_estimate_oldest=1.0,
+                    field_sample_age_estimate_youngest=2.0,
+                ),
+            ]
+        )
+        original_sheet = clean_sheet.copy(deep=True)
+        request = UploadPreflightRequest(
+            parsed_sheets={"field_sample": clean_sheet},
+            table_type="field_sample",
+            parser_options={},
+            reference_data=provider,
+        )
+
+        result = run_upload_preflight(request)
+
+        self.assertTrue(result.preflight_applied)
+        self.assertEqual(result.validated_row_count, 2)
+        self.assertEqual(
+            {finding.rule_id for finding in result.report.findings},
+            {
+                "field_sample.age_interval_order",
+                "field_sample.collected_as_field_control_not_allowed",
+                "field_sample.primary_sampling_method_not_allowed",
+                "field_sample.template_version_required",
+            },
+        )
+        self.assertEqual(provider.write_attempts, 0)
+        self.assertIn("field_sampling_methods", provider.lookup_calls)
+        self.assertIn("field_controls", provider.lookup_calls)
+        pd.testing.assert_frame_equal(clean_sheet, original_sheet)
