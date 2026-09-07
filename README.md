@@ -36,8 +36,11 @@ permitted only with `RUN_MODE=development`. In `shadow` mode, a field-sample
 upload runs the new read-only preflight immediately before the existing legacy
 write path and logs only a summary (table, row count, error/warning counts, and
 rule IDs). It never blocks, changes, or reports on the user-visible legacy
-upload flow. `enforce` is reserved for a later phase and currently does not
-block uploads.
+upload flow. In `enforce` mode, development field-sample uploads with preflight
+errors show an aggregate report and do not open the legacy write transaction;
+valid uploads continue through the existing confirmation and insert flow.
+The report can generate a metadata-only TSV in the browser. Submitted values
+are not added to that download or retained server-side.
 
 `SMDB_DB_USER` configures one role for both reads and writes. Alternatively,
 set `SMDB_DB_READ_USER` and `SMDB_DB_WRITE_USER` (and their corresponding
@@ -76,8 +79,14 @@ set -a
 source .env
 set +a
 SMDB_RUN_INTEGRATION_TESTS=1 \
-  python -m unittest tests.integration.test_upload_preflight_smdb_dev
+  python -m unittest \
+    tests.integration.test_upload_preflight_smdb_dev \
+    tests.integration.test_preflight_report_rendering
 ```
+
+Field-sample uploader acceptance is a separate human step; follow
+`docs/field-sample-preflight-user-acceptance.md` using only SMDB-dev and
+non-production test data.
 
 The project currently uses only Python's standard-library `unittest`; no
 developer-only test dependency is required.

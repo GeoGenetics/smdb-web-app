@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SMDB upload preflight report</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
 </head>
 <body class="bg-light">
@@ -23,6 +24,14 @@
                         and <strong>{{ warning_count }}</strong> warning{{ '' if warning_count == 1 else 's' }}
                     {% endif %}
                     were found across {{ row_groups|length }} affected row{{ '' if row_groups|length == 1 else 's' }}.
+                </p>
+
+                <button id="download-report" class="btn btn-outline-secondary mb-4" type="button">
+                    Download error report (TSV)
+                </button>
+                <p class="small text-muted mb-4">
+                    The download contains row, column, severity, and rule-ID metadata only.
+                    Submitted values are not included or retained by the server.
                 </p>
 
                 {% for row_group in row_groups %}
@@ -51,5 +60,25 @@
             </div>
         </section>
     </main>
+    <script id="preflight-download-rows" type="application/json">{{ download_rows|tojson }}</script>
+    <script>
+        document.getElementById("download-report").addEventListener("click", function () {
+            const rows = JSON.parse(document.getElementById("preflight-download-rows").textContent);
+            const columns = ["severity", "rule_id", "template_row", "template_column", "database_column"];
+            const escapeTsv = function (value) {
+                return String(value ?? "").replace(/[\t\r\n]/g, " ");
+            };
+            const tsv = [columns.join("\t")]
+                .concat(rows.map(row => columns.map(column => escapeTsv(row[column])).join("\t")))
+                .join("\n") + "\n";
+            const download = document.createElement("a");
+            download.href = URL.createObjectURL(new Blob([tsv], {type: "text/tab-separated-values;charset=utf-8"}));
+            download.download = "smdb-preflight-report.tsv";
+            document.body.appendChild(download);
+            download.click();
+            download.remove();
+            URL.revokeObjectURL(download.href);
+        });
+    </script>
 </body>
 </html>

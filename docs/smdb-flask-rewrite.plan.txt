@@ -82,6 +82,11 @@ Explicitly out of scope initially:
 - `unit_tests/upload_tests.py` contains placeholder paths and imports `app` at
   module import time; treat it as a future repair target, not as reliable
   coverage.
+- Known legacy error-handling flaw: the global `@app.errorhandler(Exception)`
+  handler treats ordinary HTTP errors, including a missing `/favicon.ico`
+  (404), as unknown critical application failures and redirects to the upload
+  error page. Repair this separately by allowing `HTTPException` responses to
+  pass through normally before handling genuine unexpected exceptions.
 - SMDB-dev, dedicated application roles, and a tunnel-based local web-app
   setup already exist and are the integration-test environment.
 
@@ -302,15 +307,16 @@ path to the legacy flow.
       existing confirmation flow.
 - [x] Display errors grouped by row and column, plus a total count and clear
       instruction that no data has been written.
-- [ ] Offer a downloadable TSV/CSV error report if it can be implemented
+- [x] Offer a downloadable TSV/CSV error report if it can be implemented
       without retaining uploaded personal/sensitive data beyond the current
       session lifecycle.
-- [ ] Enable `enforce` only for field-sample uploads in development after
+- [x] Enable `enforce` only for field-sample uploads in development after
       shadow-mode parity is demonstrated.
-- [ ] Add Flask test-client tests for the new report rendering, but keep most
+- [x] Add Flask test-client tests for the new report rendering, but keep most
       rule coverage at the pure unit-test level.
 - [ ] Obtain user acceptance from field-sample uploaders using non-production
-      test data.
+      test data. Follow `docs/field-sample-preflight-user-acceptance.md` and
+      retain its completed acceptance record.
 
 Exit criterion: an invalid dev upload receives a complete actionable report
 and performs no insert; a valid dev upload follows the current confirmation and

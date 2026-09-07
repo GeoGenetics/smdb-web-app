@@ -2,7 +2,10 @@
 
 import unittest
 
-from services.preflight_reporting import preflight_report_context
+from services.preflight_reporting import (
+    preflight_report_context,
+    preflight_report_download_rows,
+)
 from validation.models import ValidationError, ValidationReport
 
 
@@ -55,3 +58,23 @@ class PreflightReportContextTest(unittest.TestCase):
     def test_rejects_a_non_report_input(self):
         with self.assertRaises(TypeError):
             preflight_report_context({})
+
+    def test_download_rows_exclude_values_and_user_entered_messages(self):
+        report = ValidationReport()
+        report.add(
+            ValidationError(
+                rule_id="field_sample.primary_sampling_method_not_allowed",
+                message="Primary sampling method (private entered value) is invalid.",
+                template_row=11,
+                template_column="Primary sampling method",
+                database_column="primary_sampling_method",
+                value="private entered value",
+            )
+        )
+
+        rows = preflight_report_download_rows(report)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["rule_id"], "field_sample.primary_sampling_method_not_allowed")
+        self.assertNotIn("value", rows[0])
+        self.assertNotIn("message", rows[0])

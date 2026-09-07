@@ -56,6 +56,7 @@ from validation.reference_data import (
     ReferenceDataLookupError,
     WorkflowCachedReferenceDataProvider,
 )
+from validation.models import ValidationReport
 
 lat_lon_warning_path = os.path.join('warnings', 'latlon_warning.html')
 warnings_data_dir = 'warnings'
@@ -80,15 +81,15 @@ logger = log_util.setup()
 app.logger.setLevel(logging.DEBUG)
 
 
-def run_shadow_upload_preflight(*, clean_sheets, parser_options):
-    """Log a non-blocking preflight summary for one legacy upload attempt.
+def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
+    """Apply the configured development rollout mode to parsed legacy sheets.
 
     This adapter deliberately lives in the Flask application rather than the
     framework-free workflow service. It receives the legacy parser output,
-    uses a fresh per-upload read-only reference-data cache, and never changes
-    ``clean_sheets`` or raises an error back into the legacy upload path.
-    Finding values are intentionally excluded from logs because uploaded rows
-    can contain personal or otherwise sensitive metadata.
+    uses a fresh per-upload read-only reference-data cache, and never mutates
+    ``clean_sheets``. Shadow mode logs summaries and always returns ``None``.
+    Enforce mode returns an aggregate field-sample report only when it contains
+    errors; the caller renders it before opening the legacy write transaction.
     """
     try:
         mode = preflight_mode_from_environment()
@@ -97,14 +98,15 @@ def run_shadow_upload_preflight(*, clean_sheets, parser_options):
             "SMDB preflight configuration ignored; legacy upload continues: %s",
             error,
         )
-        return
+        return None
 
-    if mode is not PreflightMode.SHADOW:
-        return
+    if mode is PreflightMode.OFF:
+        return None
 
     reference_data = WorkflowCachedReferenceDataProvider(
         PostgresReferenceDataProvider()
     )
+    enforce_report = ValidationReport()
     for table_type in clean_sheets:
         try:
             result = run_upload_preflight(
@@ -117,37 +119,53 @@ def run_shadow_upload_preflight(*, clean_sheets, parser_options):
             )
         except ReferenceDataLookupError as error:
             app.logger.warning(
-                "SMDB preflight shadow lookup failed; legacy upload continues "
+                "SMDB preflight %s lookup failed; legacy upload continues "
                 "(table=%s, lookup=%s)",
+                mode.value,
                 table_type,
                 error.lookup_name,
             )
         except Exception:
             app.logger.exception(
-                "SMDB preflight shadow failed unexpectedly; legacy upload continues "
+                "SMDB preflight %s failed unexpectedly; legacy upload continues "
                 "(table=%s)",
+                mode.value,
                 table_type,
             )
         else:
             rule_ids = sorted({finding.rule_id for finding in result.report.findings})
-            app.logger.info(
-                "SMDB preflight shadow report "
-                "(table=%s, applied=%s, rows=%d, errors=%d, warnings=%d, rule_ids=%s)",
-                result.table_type,
-                result.preflight_applied,
-                result.validated_row_count,
-                len(result.report.errors),
-                len(result.report.warnings),
-                ",".join(rule_ids) if rule_ids else "none",
-            )
+            if mode is PreflightMode.SHADOW:
+                app.logger.info(
+                    "SMDB preflight shadow report "
+                    "(table=%s, applied=%s, rows=%d, errors=%d, warnings=%d, rule_ids=%s)",
+                    result.table_type,
+                    result.preflight_applied,
+                    result.validated_row_count,
+                    len(result.report.errors),
+                    len(result.report.warnings),
+                    ",".join(rule_ids) if rule_ids else "none",
+                )
+            elif result.table_type == data.field_sample() and result.preflight_applied:
+                enforce_report.merge(result.report)
+
+    if mode is PreflightMode.ENFORCE and enforce_report.has_errors:
+        app.logger.info(
+            "SMDB preflight enforce blocked legacy write "
+            "(table=field_sample, errors=%d, warnings=%d, rule_ids=%s)",
+            len(enforce_report.errors),
+            len(enforce_report.warnings),
+            ",".join(sorted({finding.rule_id for finding in enforce_report.findings})),
+        )
+        return enforce_report
+    return None
 
 
 def render_preflight_report(report):
     """Render a preflight report without coupling presentation to validation.
 
-    The Phase 5 enforce path will call this only after a non-blocking preflight
-    report has been produced. It is not registered as a route yet, so current
-    legacy upload and confirmation behaviour is unchanged.
+    The development-only enforce path calls this only after preflight has found
+    errors and before the legacy write transaction begins. Shadow and off modes
+    do not render this view, preserving their existing upload behaviour.
     """
     return render_template(
         "preflight_report.html",
@@ -978,10 +996,12 @@ def confirmed():
             except Exception as e:
                 return general_error_handling(message=e, delete_session_dir=True, revert_db=False, files_to_del=files_to_del['Before Upload'])
 
-        run_shadow_upload_preflight(
+        preflight_error_report = run_upload_preflight_for_rollout(
             clean_sheets=clean_sheets,
             parser_options=session.get('parser_options', {}),
         )
+        if preflight_error_report is not None:
+            return render_preflight_report(preflight_error_report)
     
         # Try to upload and rollback if errors happen
         with ENGINE.connect() as conn:
