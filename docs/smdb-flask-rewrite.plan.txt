@@ -298,9 +298,9 @@ Phase 5 — user-visible preflight report, opt-in
 Goal: make aggregate feedback available while retaining an immediate rollback
 path to the legacy flow.
 
-- [ ] Add a new template/report view or a clearly separated section in the
+- [x] Add a new template/report view or a clearly separated section in the
       existing confirmation flow.
-- [ ] Display errors grouped by row and column, plus a total count and clear
+- [x] Display errors grouped by row and column, plus a total count and clear
       instruction that no data has been written.
 - [ ] Offer a downloadable TSV/CSV error report if it can be implemented
       without retaining uploaded personal/sensitive data beyond the current

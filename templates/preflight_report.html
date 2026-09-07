@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SMDB upload preflight report</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+    <main class="container py-5">
+        <section class="card shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 mb-3">Upload preflight report</h1>
+
+                <div class="alert alert-danger" role="alert">
+                    <strong>No data has been written to the database.</strong>
+                    Correct the reported values in the source template, then upload it again.
+                </div>
+
+                <p class="mb-4">
+                    <strong>{{ error_count }}</strong> error{{ '' if error_count == 1 else 's' }}
+                    {% if warning_count %}
+                        and <strong>{{ warning_count }}</strong> warning{{ '' if warning_count == 1 else 's' }}
+                    {% endif %}
+                    were found across {{ row_groups|length }} affected row{{ '' if row_groups|length == 1 else 's' }}.
+                </p>
+
+                {% for row_group in row_groups %}
+                    <section class="border rounded p-3 mb-3 bg-white">
+                        <h2 class="h5 mb-3">{{ row_group.label }}</h2>
+                        {% for column_group in row_group.column_groups %}
+                            <div class="mb-3 {% if not loop.last %}border-bottom pb-3{% endif %}">
+                                <h3 class="h6">{{ column_group.template_column }}</h3>
+                                <ul class="mb-0">
+                                    {% for finding in column_group.findings %}
+                                        <li>
+                                            {{ finding.message }}
+                                            {% if finding.value is not none %}
+                                                <span class="text-muted">Offending value: {{ finding.value }}</span>
+                                            {% endif %}
+                                            <span class="badge text-bg-secondary ms-1">{{ finding.rule_id }}</span>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endfor %}
+                    </section>
+                {% endfor %}
+
+                <a class="btn btn-primary" href="{{ url_for('index') }}">Return to upload page</a>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

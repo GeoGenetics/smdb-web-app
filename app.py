@@ -49,6 +49,7 @@ from datetime import datetime
 import uuid
 from geopy.distance import geodesic
 from services.preflight_mode import PreflightMode, preflight_mode_from_environment
+from services.preflight_reporting import preflight_report_context
 from services.upload_workflow import UploadPreflightRequest, run_upload_preflight
 from validation.reference_data import (
     PostgresReferenceDataProvider,
@@ -139,6 +140,20 @@ def run_shadow_upload_preflight(*, clean_sheets, parser_options):
                 len(result.report.warnings),
                 ",".join(rule_ids) if rule_ids else "none",
             )
+
+
+def render_preflight_report(report):
+    """Render a preflight report without coupling presentation to validation.
+
+    The Phase 5 enforce path will call this only after a non-blocking preflight
+    report has been produced. It is not registered as a route yet, so current
+    legacy upload and confirmation behaviour is unchanged.
+    """
+    return render_template(
+        "preflight_report.html",
+        **preflight_report_context(report),
+    )
+
 
 @app.route('/', methods=['POST', 'GET'])
 @decorators.log_info(app)
