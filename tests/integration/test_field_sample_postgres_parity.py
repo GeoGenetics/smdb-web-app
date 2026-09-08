@@ -7,6 +7,8 @@ They must never be pointed at production.
 
 import os
 import unittest
+from datetime import date
+from uuid import uuid4
 
 import psycopg2
 from psycopg2 import sql
@@ -104,6 +106,21 @@ class FieldSamplePostgresParityTest(unittest.TestCase):
             field_sample_postgres_row(),
             field_sample_postgres_row(template_version=None),
             "template_version is required",
+        )
+
+    def test_field_sample_id_format(self):
+        """Exercise both accepted ID families and the reported malformed shape."""
+        sample_number = uuid4().int % 1_000
+        generic_id = f"DKSYN{date.today():%Y}{sample_number:03d}"
+        self.assert_database_accepts(
+            field_sample_postgres_row(
+                field_sample_id=generic_id,
+                field_sample_master_id=f"{generic_id}M",
+            )
+        )
+        self.assert_database_rejects(
+            field_sample_postgres_row(field_sample_id="CG_3_002851"),
+            "Field sample ID has invalid format",
         )
 
     def test_primary_sampling_method_membership(self):

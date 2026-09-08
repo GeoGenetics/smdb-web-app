@@ -18,7 +18,9 @@ class PreflightReportContextTest(unittest.TestCase):
                 message="Second issue.",
                 template_row=12,
                 template_column="Primary sampling method",
+                template_column_number=42,
                 value="Unknown method",
+                value_label="Selected primary sampling method",
             )
         )
         report.add(
@@ -50,6 +52,7 @@ class PreflightReportContextTest(unittest.TestCase):
         )
         row_12_columns = context["row_groups"][1]["column_groups"]
         self.assertEqual(row_12_columns[0]["template_column"], "Primary sampling method")
+        self.assertEqual(row_12_columns[0]["template_column_number"], 42)
         self.assertEqual(
             [finding["rule_id"] for finding in row_12_columns[0]["findings"]],
             ["field_sample.second", "field_sample.warning"],
@@ -68,6 +71,7 @@ class PreflightReportContextTest(unittest.TestCase):
                 template_row=11,
                 template_column="Primary sampling method",
                 database_column="primary_sampling_method",
+                template_column_number=42,
                 value="private entered value",
             )
         )
@@ -78,3 +82,4 @@ class PreflightReportContextTest(unittest.TestCase):
         self.assertEqual(rows[0]["rule_id"], "field_sample.primary_sampling_method_not_allowed")
         self.assertNotIn("value", rows[0])
         self.assertNotIn("message", rows[0])
+        self.assertEqual(rows[0]["template_column_number"], 42)

@@ -20,7 +20,7 @@ class FieldSampleFixtureTest(unittest.TestCase):
 
         first["field_sample_id"] = "CHANGED"
 
-        self.assertEqual(second["field_sample_id"], "TEST_FIELD_SAMPLE_001")
+        self.assertEqual(second["field_sample_id"], "CGG_1_000001")
 
     def test_invalid_age_fixture_has_reversed_bounds(self):
         row = invalid_age_interval_row()

@@ -73,7 +73,7 @@ def field_sample_row(**overrides):
     """Return an independent, valid baseline row for future rule tests."""
     row = {
         "__template_row__": 11,
-        "field_sample_id": "TEST_FIELD_SAMPLE_001",
+        "field_sample_id": "CGG_1_000001",
         "template_version": "Version: test",
         "primary_sampling_method": "Tube sampling",
         "other_values": None,

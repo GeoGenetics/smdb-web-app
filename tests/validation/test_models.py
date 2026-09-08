@@ -37,6 +37,14 @@ class ValidationModelsConstructionTest(unittest.TestCase):
                 severity="notice",
             )
 
+    def test_error_rejects_an_invalid_template_column_number(self):
+        with self.assertRaises(ValueError):
+            ValidationError(
+                rule_id="field_sample.example",
+                message="Example message.",
+                template_column_number=0,
+            )
+
 
 class ValidationReportContractTest(unittest.TestCase):
     @staticmethod

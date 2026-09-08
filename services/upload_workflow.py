@@ -7,7 +7,7 @@ explicit inputs, then returns a validation report as explicit output.
 """
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from validation.field_sample import validate_field_sample_rows
@@ -16,6 +16,21 @@ from validation.reference_data import ReferenceDataProvider
 
 
 FIELD_SAMPLE_TABLE_TYPE = "field_sample"
+TEMPLATE_ROW_KEY = "__template_row__"
+
+
+@dataclass(frozen=True, slots=True)
+class PreflightLocationMetadata:
+    """Template locations held beside, never inside, database-bound rows.
+
+    ``row_numbers`` is aligned with the parsed records. ``column_numbers`` and
+    ``column_labels`` are keyed by canonical database column name. The legacy
+    DataFrame remains unchanged so these values can never reach ``to_sql()``.
+    """
+
+    row_numbers: tuple[int | None, ...]
+    column_numbers: Mapping[str, int]
+    column_labels: Mapping[str, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +49,7 @@ class UploadPreflightRequest:
     table_type: str
     parser_options: Mapping[str, Any]
     reference_data: ReferenceDataProvider
+    location_metadata: PreflightLocationMetadata | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.table_type, str) or not self.table_type.strip():
@@ -49,6 +65,10 @@ class UploadPreflightRequest:
             )
         if not isinstance(self.reference_data, ReferenceDataProvider):
             raise TypeError("reference_data must implement ReferenceDataProvider")
+        if self.location_metadata is not None and not isinstance(
+            self.location_metadata, PreflightLocationMetadata
+        ):
+            raise TypeError("location_metadata must be PreflightLocationMetadata or None")
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +116,44 @@ def _canonical_rows(parsed_sheet: Any) -> tuple[Mapping[str, Any], ...]:
     return canonical_rows
 
 
+def _rows_with_locations(
+    rows: tuple[Mapping[str, Any], ...], metadata: PreflightLocationMetadata | None
+) -> tuple[Mapping[str, Any], ...]:
+    if metadata is None:
+        return rows
+    if len(metadata.row_numbers) != len(rows):
+        raise ValueError("preflight location row_numbers must align with parsed rows")
+    return tuple(
+        {**row, TEMPLATE_ROW_KEY: metadata.row_numbers[index]}
+        for index, row in enumerate(rows)
+    )
+
+
+def _report_with_locations(
+    report: ValidationReport, metadata: PreflightLocationMetadata | None
+) -> ValidationReport:
+    if metadata is None:
+        return report
+    enriched = ValidationReport()
+    for finding in report.findings:
+        database_column = finding.database_column
+        if database_column is None:
+            enriched.add(finding)
+            continue
+        enriched.add(
+            replace(
+                finding,
+                template_column=metadata.column_labels.get(
+                    database_column, finding.template_column
+                ),
+                template_column_number=metadata.column_numbers.get(
+                    database_column, finding.template_column_number
+                ),
+            )
+        )
+    return enriched
+
+
 def run_upload_preflight(request: UploadPreflightRequest) -> UploadPreflightResult:
     """Run available pure preflight rules for one parsed table type.
 
@@ -104,9 +162,13 @@ def run_upload_preflight(request: UploadPreflightRequest) -> UploadPreflightResu
     the only implemented table type in this first workflow checkpoint.
     """
     rows = _canonical_rows(request.parsed_sheets[request.table_type])
+    validation_rows = _rows_with_locations(rows, request.location_metadata)
 
     if request.table_type == FIELD_SAMPLE_TABLE_TYPE:
-        report = validate_field_sample_rows(rows, request.reference_data)
+        report = _report_with_locations(
+            validate_field_sample_rows(validation_rows, request.reference_data),
+            request.location_metadata,
+        )
         return UploadPreflightResult(
             table_type=request.table_type,
             parser_options=request.parser_options,

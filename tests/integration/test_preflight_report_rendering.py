@@ -50,6 +50,7 @@ class PreflightReportRenderingTest(unittest.TestCase):
                 message="Oldest age estimate must be greater than or equal to youngest age estimate.",
                 template_row=12,
                 template_column="Oldest age estimate",
+                template_column_number=18,
                 database_column="field_sample_age_estimate_oldest",
                 value=1.0,
             )
@@ -119,6 +120,7 @@ class PreflightReportRenderingTest(unittest.TestCase):
         self.assertIn("No data has been written to the database.", body)
         self.assertIn("Template row 11", body)
         self.assertIn("Template row 12", body)
+        self.assertIn("column 18", body)
         self.assertIn("field_sample.template_version_required", body)
         self.assertIn("smdb-preflight-report.tsv", body)
         write_engine.connect.assert_not_called()

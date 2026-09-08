@@ -39,13 +39,18 @@
                         <h2 class="h5 mb-3">{{ row_group.label }}</h2>
                         {% for column_group in row_group.column_groups %}
                             <div class="mb-3 {% if not loop.last %}border-bottom pb-3{% endif %}">
-                                <h3 class="h6">{{ column_group.template_column }}</h3>
+                                <h3 class="h6">
+                                    {{ column_group.template_column }}
+                                    {% if column_group.template_column_number is not none %}
+                                        <span class="text-muted">(column {{ column_group.template_column_number }})</span>
+                                    {% endif %}
+                                </h3>
                                 <ul class="mb-0">
                                     {% for finding in column_group.findings %}
                                         <li>
                                             {{ finding.message }}
                                             {% if finding.value is not none %}
-                                                <span class="text-muted">Offending value: {{ finding.value }}</span>
+                                                <span class="text-muted">{{ finding.value_label }}: {{ finding.value }}</span>
                                             {% endif %}
                                             <span class="badge text-bg-secondary ms-1">{{ finding.rule_id }}</span>
                                         </li>
@@ -64,7 +69,7 @@
     <script>
         document.getElementById("download-report").addEventListener("click", function () {
             const rows = JSON.parse(document.getElementById("preflight-download-rows").textContent);
-            const columns = ["severity", "rule_id", "template_row", "template_column", "database_column"];
+            const columns = ["severity", "rule_id", "template_row", "template_column", "template_column_number", "database_column"];
             const escapeTsv = function (value) {
                 return String(value ?? "").replace(/[\t\r\n]/g, " ");
             };

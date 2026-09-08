@@ -7,10 +7,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from services.upload_workflow import (
-    UploadPreflightRequest,
-    run_upload_preflight,
-)
+from services.upload_workflow import UploadPreflightRequest, run_upload_preflight
 from tests.validation.fixtures import common_reference_data, field_sample_row
 from validation.reference_data import InMemoryReferenceDataProvider
 
@@ -99,6 +96,47 @@ class UploadWorkflowParserOutputTest(unittest.TestCase):
 
 
 class UploadWorkflowOrchestrationTest(unittest.TestCase):
+    def test_enriches_findings_with_sidecar_template_locations_only(self):
+        """Physical locations reach the report without altering parser output."""
+        # A preceding import-boundary test reloads this module. Resolve the
+        # metadata class from its current module namespace for this test.
+        from services.upload_workflow import PreflightLocationMetadata as CurrentMetadata
+
+        parsed_row = field_sample_row(
+            primary_sampling_method="Coring",
+            field_sampling_depth_discrete=10.0,
+            field_sampling_interval_from=None,
+            field_sampling_interval_to=None,
+        )
+        parsed_row.pop("__template_row__")
+        clean_sheet = pd.DataFrame([parsed_row])
+        original_sheet = clean_sheet.copy(deep=True)
+        request = UploadPreflightRequest(
+            parsed_sheets={"field_sample": clean_sheet},
+            table_type="field_sample",
+            parser_options={},
+            reference_data=reference_provider(),
+            location_metadata=CurrentMetadata(
+                row_numbers=(27,),
+                column_numbers={"primary_sampling_method": 42},
+                column_labels={"primary_sampling_method": "Primary sampling method"},
+            ),
+        )
+
+        result = run_upload_preflight(request)
+
+        finding = result.report.errors[0]
+        self.assertEqual(
+            finding.rule_id,
+            "field_sample.interval_sampling_method_requires_interval_depth_only",
+        )
+        self.assertEqual(finding.template_row, 27)
+        self.assertEqual(finding.template_column, "Primary sampling method")
+        self.assertEqual(finding.template_column_number, 42)
+        self.assertEqual(finding.value_label, "Selected primary sampling method")
+        self.assertNotIn("__template_row__", clean_sheet.columns)
+        pd.testing.assert_frame_equal(clean_sheet, original_sheet)
+
     def test_returns_aggregate_findings_without_mutating_or_writing_the_sheet(self):
         """Preflight reads reference values and returns findings to its caller."""
         data = common_reference_data()

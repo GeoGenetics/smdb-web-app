@@ -1,6 +1,7 @@
 """Unit tests for the initial pure field-sample preflight rule slice."""
 
 import unittest
+from math import nan
 
 from tests.validation.fixtures import common_reference_data, field_sample_row
 from validation.field_sample import (
@@ -11,6 +12,8 @@ from validation.field_sample import (
     RULE_DEPTH_TYPES_EXCLUSIVE,
     RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID,
     RULE_FILTER_SAMPLING_NO_DEPTH,
+    RULE_FIELD_SAMPLE_ID_FORMAT_INVALID,
+    RULE_FIELD_SAMPLE_ID_UPPERCASE,
     RULE_FIELD_CONTROL_NOT_ALLOWED,
     RULE_INTERVAL_DEPTH_ONLY,
     RULE_INTERVAL_ENDPOINTS_PAIRED,
@@ -61,6 +64,34 @@ class FieldSampleValidationTest(unittest.TestCase):
                     [RULE_TEMPLATE_VERSION_REQUIRED],
                 )
                 self.assertEqual(report.errors[0].template_row, 11)
+
+    def test_field_sample_id_format_accepts_both_database_shapes_and_blank(self):
+        report = self.validate(
+            field_sample_row(field_sample_id="CGG_3_002851"),
+            field_sample_row(__template_row__=12, field_sample_id="DKLUC2026001"),
+            field_sample_row(__template_row__=13, field_sample_id="DKLUCUNKNOWN001"),
+            field_sample_row(__template_row__=14, field_sample_id=None),
+            field_sample_row(__template_row__=15, field_sample_id=" "),
+        )
+
+        self.assertEqual(report.findings, ())
+
+    def test_field_sample_id_format_reports_uppercase_and_shape_errors_per_row(self):
+        report = self.validate(
+            field_sample_row(field_sample_id="CG_3_002851"),
+            field_sample_row(__template_row__=12, field_sample_id="dkluc2026001"),
+            field_sample_row(__template_row__=13, field_sample_id="CGG_12_002851"),
+        )
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [
+                RULE_FIELD_SAMPLE_ID_FORMAT_INVALID,
+                RULE_FIELD_SAMPLE_ID_UPPERCASE,
+                RULE_FIELD_SAMPLE_ID_FORMAT_INVALID,
+            ],
+        )
+        self.assertEqual([error.template_row for error in report.errors], [11, 12, 13])
 
     def test_field_control_membership_accepts_valid_and_blank_foreign_keys(self):
         report = self.validate(
@@ -229,6 +260,19 @@ class FieldSampleValidationTest(unittest.TestCase):
             [RULE_INTERVAL_DEPTH_ONLY, RULE_INTERVAL_DEPTH_ONLY],
         )
         self.assertEqual([error.template_row for error in report.errors], [12, 13])
+
+    def test_optional_blank_float_cells_are_not_treated_as_depths(self):
+        """Legacy float parsing turns blank numeric template cells into NaN."""
+        report = self.validate(
+            field_sample_row(
+                primary_sampling_method="Tube sampling",
+                field_sampling_depth_discrete=10.0,
+                field_sampling_interval_from=nan,
+                field_sampling_interval_to=nan,
+            )
+        )
+
+        self.assertEqual(report.findings, ())
 
     def test_discrete_methods_require_discrete_depth_only(self):
         report = self.validate(

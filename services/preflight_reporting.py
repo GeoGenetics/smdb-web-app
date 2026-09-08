@@ -23,6 +23,7 @@ def preflight_report_download_rows(report: ValidationReport) -> tuple[dict[str, 
             "rule_id": finding.rule_id,
             "template_row": finding.template_row or "",
             "template_column": finding.template_column or "",
+            "template_column_number": finding.template_column_number or "",
             "database_column": finding.database_column or "",
         }
         for finding in report.findings
@@ -41,10 +42,22 @@ def preflight_report_context(report: ValidationReport) -> dict[str, Any]:
 
     row_groups = []
     for template_row, findings in report.group_by_row().items():
-        columns: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
+        columns: OrderedDict[str, dict[str, Any]] = OrderedDict()
         for finding in findings:
             column_name = finding.template_column or "General"
-            columns.setdefault(column_name, []).append(finding.to_dict())
+            column_group = columns.setdefault(
+                column_name,
+                {
+                    "template_column_number": finding.template_column_number,
+                    "findings": [],
+                },
+            )
+            if (
+                column_group["template_column_number"] is None
+                and finding.template_column_number is not None
+            ):
+                column_group["template_column_number"] = finding.template_column_number
+            column_group["findings"].append(finding.to_dict())
 
         row_groups.append(
             {
@@ -57,9 +70,12 @@ def preflight_report_context(report: ValidationReport) -> dict[str, Any]:
                 "column_groups": tuple(
                     {
                         "template_column": column_name,
-                        "findings": tuple(column_findings),
+                        "template_column_number": column_group[
+                            "template_column_number"
+                        ],
+                        "findings": tuple(column_group["findings"]),
                     }
-                    for column_name, column_findings in columns.items()
+                    for column_name, column_group in columns.items()
                 ),
             }
         )

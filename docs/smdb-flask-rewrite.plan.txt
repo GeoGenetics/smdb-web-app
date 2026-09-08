@@ -142,9 +142,11 @@ At minimum:
     `field_sample.age_interval_order`;
   - `template_row`: one-based user-visible spreadsheet row number;
   - `template_column`: user-visible header from the template;
+  - `template_column_number`: optional one-based physical template column;
   - `database_column`: optional canonical database-column name;
   - `message`: concise remediation-focused message;
-  - `value`: optional, safely rendered offending value;
+  - `value`: optional, safely rendered contextual value, with an explicit
+    label such as `Offending value` or `Selected primary sampling method`;
   - `severity`: initially `error` or `warning`.
 - `ValidationReport`
   - ordered collection of errors and warnings;
@@ -236,6 +238,7 @@ The initial rule set is deliberately limited to rules recently demonstrated by
 real bug reports and uploads:
 
 - [x] required `template_version`;
+- [x] field-sample ID uppercase and syntax, including the legacy `CGG` form;
 - [x] allowed-value/foreign-key membership, including `collected_as_field_control`;
 - [x] oldest age estimate greater than or equal to youngest age estimate;
 - [x] broad/local environmental-context pair compatibility;
@@ -321,6 +324,11 @@ path to the legacy flow.
       shadow-mode parity is demonstrated.
 - [x] Add Flask test-client tests for the new report rendering, but keep most
       rule coverage at the pure unit-test level.
+- [x] Follow-up: preserve physical template row and column locations as
+      preflight-only sidecar metadata; display column numbers in the report;
+      label category-driven sampling-method findings as a selected value rather
+      than an offending value. Keep this metadata out of database-bound frames
+      and cover the workflow and rendered-report behaviour with tests.
 - [ ] Obtain user acceptance from field-sample uploaders using non-production
       test data. Follow `docs/field-sample-preflight-user-acceptance.md` and
       retain its completed acceptance record.

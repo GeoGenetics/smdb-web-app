@@ -31,7 +31,7 @@ import shutil
 import constants.misc_constants as misc_constants
 import log_util
 from utils import queries
-from flask import Flask, abort, render_template, jsonify, after_this_request, render_template_string, request, send_file, redirect, url_for, send_from_directory, session, has_request_context
+from flask import Flask, abort, render_template, jsonify, after_this_request, render_template_string, request, send_file, redirect, url_for, send_from_directory, session, has_request_context, g
 import os
 import sys
 from constants.misc_constants import SHEET_TYPES, ADMIN_EMAIL, PARSED_SHEETS_FOLDER, ORIGINAL_FILES, TEMP_FOLDER
@@ -49,9 +49,20 @@ from datetime import datetime
 import uuid
 from geopy.distance import geodesic
 from services.preflight_mode import PreflightMode, preflight_mode_from_environment
-from services.preflight_logging import unexpected_preflight_failure_event
+from services.preflight_logging import (
+    LEGACY_DATABASE_ERROR_EVENT,
+    LEGACY_DATABASE_SUCCESS_EVENT,
+    LEGACY_WRITE_BLOCKED_EVENT,
+    legacy_database_outcome_event,
+    preflight_report_event,
+    unexpected_preflight_failure_event,
+)
 from services.preflight_reporting import preflight_report_context
-from services.upload_workflow import UploadPreflightRequest, run_upload_preflight
+from services.upload_workflow import (
+    PreflightLocationMetadata,
+    UploadPreflightRequest,
+    run_upload_preflight,
+)
 from validation.reference_data import (
     PostgresReferenceDataProvider,
     ReferenceDataLookupError,
@@ -82,7 +93,7 @@ logger = log_util.setup()
 app.logger.setLevel(logging.DEBUG)
 
 
-def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
+def run_upload_preflight_for_rollout(*, clean_sheets, parser_options, location_metadata=None):
     """Apply the configured development rollout mode to parsed legacy sheets.
 
     This adapter deliberately lives in the Flask application rather than the
@@ -104,6 +115,8 @@ def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
     if mode is PreflightMode.OFF:
         return None
 
+    correlation_id = uuid.uuid4().hex
+    preflight_applied = False
     reference_data = WorkflowCachedReferenceDataProvider(
         PostgresReferenceDataProvider()
     )
@@ -116,6 +129,7 @@ def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
                     table_type=table_type,
                     parser_options=parser_options,
                     reference_data=reference_data,
+                    location_metadata=(location_metadata or {}).get(table_type),
                 )
             )
         except ReferenceDataLookupError as error:
@@ -130,6 +144,7 @@ def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
             app.logger.error(
                 "SMDB preflight event=%s; legacy upload continues",
                 unexpected_preflight_failure_event(
+                    correlation_id=correlation_id,
                     mode=mode.value,
                     table_type=table_type,
                     error=error,
@@ -137,6 +152,20 @@ def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
             )
         else:
             rule_ids = sorted({finding.rule_id for finding in result.report.findings})
+            if result.preflight_applied:
+                preflight_applied = True
+                app.logger.info(
+                    "SMDB preflight event=%s",
+                    preflight_report_event(
+                        correlation_id=correlation_id,
+                        mode=mode.value,
+                        table_type=result.table_type,
+                        validated_row_count=result.validated_row_count,
+                        error_count=len(result.report.errors),
+                        warning_count=len(result.report.warnings),
+                        rule_ids=tuple(rule_ids),
+                    ),
+                )
             if mode is PreflightMode.SHADOW:
                 app.logger.info(
                     "SMDB preflight shadow report "
@@ -151,6 +180,14 @@ def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
             elif result.table_type == data.field_sample() and result.preflight_applied:
                 enforce_report.merge(result.report)
 
+    if has_request_context() and preflight_applied:
+        # Request-scoped only: this random token correlates safe aggregate
+        # preflight events to the later legacy write outcome.
+        g.smdb_preflight_metrics = {
+            "correlation_id": correlation_id,
+            "mode": mode.value,
+        }
+
     if mode is PreflightMode.ENFORCE and enforce_report.has_errors:
         app.logger.info(
             "SMDB preflight enforce blocked legacy write "
@@ -158,6 +195,14 @@ def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
             len(enforce_report.errors),
             len(enforce_report.warnings),
             ",".join(sorted({finding.rule_id for finding in enforce_report.findings})),
+        )
+        app.logger.info(
+            "SMDB preflight event=%s",
+            legacy_database_outcome_event(
+                event_name=LEGACY_WRITE_BLOCKED_EVENT,
+                correlation_id=correlation_id,
+                mode=mode.value,
+            ),
         )
         return enforce_report
     return None
@@ -466,6 +511,7 @@ def upload_file():
                 raise DontTriggerFileDeletion(f'File {file_path} is trying to be uploaded by other user. Please change the file name and try again')
             
             clean_sheets = []
+            preflight_location_metadata = {}
             
             for i, sheet in enumerate(sheets_to_parse):
                 sheet = sheet.dropna(how='all', axis='index')
@@ -488,6 +534,10 @@ def upload_file():
                 if split_database_table_name == data.field_sample():
                     # Reset the header using row 9, then drop all spec rows above and the instruction row
                     sheet.columns = sheet.iloc[8]
+                    template_column_numbers = {
+                        column_name: position
+                        for position, column_name in enumerate(sheet.columns, start=1)
+                    }
                     sheet = sheet.iloc[9:].copy()
                     source_row_numbers = source_row_numbers.loc[sheet.index].reset_index(drop=True)
                     sheet = sheet.reset_index(drop=True)
@@ -507,6 +557,19 @@ def upload_file():
                                             thousands_seperator=thousands_seperator,
                                             engine=ENGINE_READ_ONLY,
                                             source_row_numbers=source_row_numbers)
+
+                if split_database_table_name == data.field_sample():
+                    column_numbers = {}
+                    column_labels = {}
+                    for template_column, database_column in sheet_to_db_col_name_map.items():
+                        if template_column in template_column_numbers:
+                            column_numbers[database_column] = template_column_numbers[template_column]
+                            column_labels[database_column] = template_column
+                    preflight_location_metadata[split_database_table_name] = {
+                        "row_numbers": [int(row) for row in source_row_numbers.iloc[:len(clean_sheet)]],
+                        "column_numbers": column_numbers,
+                        "column_labels": column_labels,
+                    }
                        
                 # clean_sheet.columns = clean_sheet.columns.str.strip()
                 # clean_sheet = clean_sheet.rename(columns=sheet_to_db_col_name_map, errors="raise")     
@@ -753,6 +816,8 @@ NOTE: This error is most likely caused by wrong usage of Excels fill handle.
                     clean_sheet.to_csv(write_path, index=False, encoding=session.get('encoding_user_input'), sep="\t")
                 else:
                     raise Exception("Error happened during writing parsed sheet. Contact admin.")
+
+            session["preflight_location_metadata"] = preflight_location_metadata
             
             warnings_data_all = {}
             
@@ -940,6 +1005,7 @@ def confirmed():
             table_splits = db_table_related_constants.DBTableRelated.TABLE_SPLITTER.get(database_table_name)
             tables_uploaded_to = []
             clean_sheets = {}
+            preflight_location_metadata = {}
             row_counts_before_upload = {}
             row_counts_after_upload = {}
             row_count_errors = {}
@@ -948,6 +1014,12 @@ def confirmed():
             upload_id = str(session.get("session_id"))
             session['upload_id'] = upload_id
             upload_time = pd.Timestamp.now(tz='UTC')
+            for table_name, metadata in session.get("preflight_location_metadata", {}).items():
+                preflight_location_metadata[table_name] = PreflightLocationMetadata(
+                    row_numbers=tuple(metadata.get("row_numbers", ())),
+                    column_numbers=metadata.get("column_numbers", {}),
+                    column_labels=metadata.get("column_labels", {}),
+                )
             
 
             tables_with_uid = queries.check_if_upload_id_exists_in_schema(database=SQL_ALCH_CONFIG['database'], schema=SQL_ALCH_CONFIG['schema_name'], upload_id=session.get('upload_id'), 
@@ -1010,6 +1082,7 @@ def confirmed():
         preflight_error_report = run_upload_preflight_for_rollout(
             clean_sheets=clean_sheets,
             parser_options=session.get('parser_options', {}),
+            location_metadata=preflight_location_metadata,
         )
         if preflight_error_report is not None:
             return render_preflight_report(preflight_error_report)
@@ -1029,6 +1102,17 @@ def confirmed():
                                             index=False)
 
                 except Exception as e:
+                    preflight_metrics = getattr(g, "smdb_preflight_metrics", None)
+                    if preflight_metrics is not None:
+                        app.logger.warning(
+                            "SMDB preflight event=%s",
+                            legacy_database_outcome_event(
+                                event_name=LEGACY_DATABASE_ERROR_EVENT,
+                                correlation_id=preflight_metrics["correlation_id"],
+                                mode=preflight_metrics["mode"],
+                                database_error=e,
+                            ),
+                        )
                     try:
                         # Rolling back to conn.begin()
                         trans.rollback()
@@ -1048,7 +1132,17 @@ def confirmed():
                             return general_error_handling(message=e.__cause__.orig, delete_session_dir=True, revert_db=False, files_to_del=files_to_del['Before Upload'])        
                 # Commit if no exception happened
                 else:
-                    trans.commit() 
+                    trans.commit()
+                    preflight_metrics = getattr(g, "smdb_preflight_metrics", None)
+                    if preflight_metrics is not None:
+                        app.logger.info(
+                            "SMDB preflight event=%s",
+                            legacy_database_outcome_event(
+                                event_name=LEGACY_DATABASE_SUCCESS_EVENT,
+                                correlation_id=preflight_metrics["correlation_id"],
+                                mode=preflight_metrics["mode"],
+                            ),
+                        )
         
         # The following is validation only. Nothing should be created, only moved.           
         try:

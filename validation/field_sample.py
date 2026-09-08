@@ -8,7 +8,9 @@ boundary.
 """
 
 from collections.abc import Iterable, Mapping
+from math import isnan
 from numbers import Number
+import re
 from typing import Any
 
 from validation.models import ValidationError, ValidationReport
@@ -18,6 +20,7 @@ from validation.reference_data import ReferenceDataProvider
 TEMPLATE_ROW_KEY = "__template_row__"
 
 TEMPLATE_COLUMNS = {
+    "field_sample_id": "Unique GeoGenetics Sample ID",
     "template_version": "Template version",
     "primary_sampling_method": "Primary sampling method",
     "collected_as_field_control": "Collected as field control",
@@ -35,6 +38,8 @@ TEMPLATE_COLUMNS = {
 }
 
 RULE_TEMPLATE_VERSION_REQUIRED = "field_sample.template_version_required"
+RULE_FIELD_SAMPLE_ID_UPPERCASE = "field_sample.field_sample_id_uppercase"
+RULE_FIELD_SAMPLE_ID_FORMAT_INVALID = "field_sample.field_sample_id_format_invalid"
 RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED = (
     "field_sample.primary_sampling_method_not_allowed"
 )
@@ -92,11 +97,26 @@ AIR_OR_WATER_MEDIA = frozenset(
     }
 )
 OTHER_SAMPLING_METHOD = 'Other (specify in "Other values" column)'
+CGG_FIELD_SAMPLE_ID_PATTERN = re.compile(r"^CGG_\d{1}_\d{6}$")
+GENERAL_FIELD_SAMPLE_ID_PATTERN = re.compile(
+    r"^[A-Z]{2}[A-Z0-9]{3}(?:\d{4}|UNKNOWN)\d{3}$"
+)
 
 
 def _is_blank(value: Any) -> bool:
-    """Return whether a parser-normalised value is absent."""
-    return value is None or (isinstance(value, str) and not value.strip())
+    """Return whether a parser-normalised value is absent.
+
+    The legacy float parser represents blank optional numeric cells as IEEE
+    ``NaN``. Treat that parser-level missing-value marker exactly like ``None``
+    or an empty template cell, rather than mistaking it for a supplied depth.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return True
+    return (
+        isinstance(value, Number)
+        and not isinstance(value, bool)
+        and isnan(value)
+    )
 
 
 def _template_row(row: Mapping[str, Any]) -> int | None:
@@ -144,6 +164,68 @@ def _validate_template_version(row: Mapping[str, Any], report: ValidationReport)
             template_row=_template_row(row),
             template_column=TEMPLATE_COLUMNS["template_version"],
             database_column="template_version",
+            value=value,
+        )
+    )
+
+
+def _validate_field_sample_id_format(
+    row: Mapping[str, Any], report: ValidationReport
+) -> None:
+    """Mirror the format/uppercase branch of the ID trigger without DB lookups.
+
+    Country-code, sample-year, uniqueness, and parent-ID checks deliberately
+    remain database-backed because they depend on other columns or current
+    table state.  The legacy ``CGG`` branch runs first in PostgreSQL, so it is
+    intentionally checked before the general uppercase/shape branch here.
+    """
+    value = row.get("field_sample_id")
+    if _is_blank(value):
+        return
+
+    field_sample_id = str(value)
+    if field_sample_id.upper().startswith("CGG"):
+        if CGG_FIELD_SAMPLE_ID_PATTERN.fullmatch(field_sample_id):
+            return
+        report.add(
+            ValidationError(
+                rule_id=RULE_FIELD_SAMPLE_ID_FORMAT_INVALID,
+                message=(
+                    'CGG ID has invalid format (expected CGG_X_XXXXXX).'
+                ),
+                template_row=_template_row(row),
+                template_column=TEMPLATE_COLUMNS["field_sample_id"],
+                database_column="field_sample_id",
+                value=value,
+            )
+        )
+        return
+
+    if field_sample_id != field_sample_id.upper():
+        report.add(
+            ValidationError(
+                rule_id=RULE_FIELD_SAMPLE_ID_UPPERCASE,
+                message=f'Field sample ID must be UPPERCASE: got "{field_sample_id}".',
+                template_row=_template_row(row),
+                template_column=TEMPLATE_COLUMNS["field_sample_id"],
+                database_column="field_sample_id",
+                value=value,
+            )
+        )
+        return
+
+    if GENERAL_FIELD_SAMPLE_ID_PATTERN.fullmatch(field_sample_id):
+        return
+    report.add(
+        ValidationError(
+            rule_id=RULE_FIELD_SAMPLE_ID_FORMAT_INVALID,
+            message=(
+                "Field sample ID has invalid format "
+                "(expected C{2}XXX(YYYY|UNKNOWN)NNN)."
+            ),
+            template_row=_template_row(row),
+            template_column=TEMPLATE_COLUMNS["field_sample_id"],
+            database_column="field_sample_id",
             value=value,
         )
     )
@@ -307,6 +389,7 @@ def _validate_sampling_method_depth_category(
                     template_column=TEMPLATE_COLUMNS["primary_sampling_method"],
                     database_column="primary_sampling_method",
                     value=method,
+                    value_label="Selected primary sampling method",
                 )
             )
         return
@@ -324,6 +407,7 @@ def _validate_sampling_method_depth_category(
                     template_column=TEMPLATE_COLUMNS["primary_sampling_method"],
                     database_column="primary_sampling_method",
                     value=method,
+                    value_label="Selected primary sampling method",
                 )
             )
         return
@@ -342,6 +426,7 @@ def _validate_sampling_method_depth_category(
                 template_column=TEMPLATE_COLUMNS["primary_sampling_method"],
                 database_column="primary_sampling_method",
                 value=method,
+                value_label="Selected primary sampling method",
             )
         )
         return
@@ -509,6 +594,7 @@ def validate_field_sample_rows(
     report = ValidationReport()
     for row in rows:
         _validate_template_version(row, report)
+        _validate_field_sample_id_format(row, report)
         _validate_primary_sampling_method(row, report, reference_data)
         _validate_field_control(row, report, reference_data)
         _validate_age_interval(row, report)

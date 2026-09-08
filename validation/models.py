@@ -25,8 +25,10 @@ class ValidationError:
     message: str
     template_row: int | None = None
     template_column: str | None = None
+    template_column_number: int | None = None
     database_column: str | None = None
     value: Any | None = None
+    value_label: str = "Offending value"
     severity: str = "error"
 
     def __post_init__(self):
@@ -40,6 +42,16 @@ class ValidationError:
             or self.template_row < 1
         ):
             raise ValueError("template_row must be a positive integer or None")
+        if self.template_column_number is not None and (
+            not isinstance(self.template_column_number, int)
+            or isinstance(self.template_column_number, bool)
+            or self.template_column_number < 1
+        ):
+            raise ValueError(
+                "template_column_number must be a positive integer or None"
+            )
+        if not isinstance(self.value_label, str) or not self.value_label.strip():
+            raise ValueError("value_label must be a non-empty string")
         if not isinstance(self.severity, str) or self.severity not in VALID_SEVERITIES:
             raise ValueError(
                 f"severity must be one of {sorted(VALID_SEVERITIES)}, "
@@ -64,8 +76,10 @@ class ValidationError:
             "message": self.message,
             "template_row": self.template_row,
             "template_column": self.template_column,
+            "template_column_number": self.template_column_number,
             "database_column": self.database_column,
             "value": self.display_value,
+            "value_label": self.value_label,
             "severity": self.severity,
         }
 
