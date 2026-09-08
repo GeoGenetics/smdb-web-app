@@ -342,7 +342,7 @@ contradictory rule system.
       SMDB-dev's actual database behavior.
 - [x] Record expected differences, including database-only concurrency and
       cross-table conditions.
-- [ ] Add structured logging for unexpected preflight failures without logging
+- [x] Add structured logging for unexpected preflight failures without logging
       full uploaded rows or secrets.
 - [ ] Measure: number of preflight errors per upload, legacy database errors
       reached after preflight, and false-positive reports.

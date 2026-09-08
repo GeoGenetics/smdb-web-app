@@ -49,6 +49,7 @@ from datetime import datetime
 import uuid
 from geopy.distance import geodesic
 from services.preflight_mode import PreflightMode, preflight_mode_from_environment
+from services.preflight_logging import unexpected_preflight_failure_event
 from services.preflight_reporting import preflight_report_context
 from services.upload_workflow import UploadPreflightRequest, run_upload_preflight
 from validation.reference_data import (
@@ -125,12 +126,14 @@ def run_upload_preflight_for_rollout(*, clean_sheets, parser_options):
                 table_type,
                 error.lookup_name,
             )
-        except Exception:
-            app.logger.exception(
-                "SMDB preflight %s failed unexpectedly; legacy upload continues "
-                "(table=%s)",
-                mode.value,
-                table_type,
+        except Exception as error:
+            app.logger.error(
+                "SMDB preflight event=%s; legacy upload continues",
+                unexpected_preflight_failure_event(
+                    mode=mode.value,
+                    table_type=table_type,
+                    error=error,
+                ),
             )
         else:
             rule_ids = sorted({finding.rule_id for finding in result.report.findings})
