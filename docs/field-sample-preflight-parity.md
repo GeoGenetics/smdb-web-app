@@ -133,3 +133,30 @@ depth checks. If they are not legitimate, the template dropdown choices and
 user-facing guidance for Filter/air/water cases must be reconciled with that
 policy instead. Either option needs production-impact review, a migration, and
 new SMDB-dev parity cases before deployment.
+
+## Expected differences and database-only conditions
+
+The following differences are intentional for the first preflight release.
+They are not Python failures to be hidden or silently relaxed: PostgreSQL
+remains authoritative for each item.
+
+| Area | What preflight does | What only PostgreSQL can guarantee | Operational treatment |
+| --- | --- | --- | --- |
+| Concurrent uploads and direct SQL | Validates the row and reference values observed during the preflight read. | Enforces uniqueness, foreign keys, and trigger conditions at the exact write transaction. Another session can insert the same ID or change a reference value after preflight has completed. | Keep all constraints and triggers enabled. A database rejection after a clean preflight is possible and must remain a normal, actionable upload error. |
+| Field-sample identity and parent relationships | Does not validate generated IDs, duplicate IDs, or ancestry. | `field_sample_id_validate_alpha2_only()`, the primary key, the self-reference foreign key, and cycle-prevention trigger validate current table state. | Treat as database-only until an explicitly scoped ID/parent validation slice is designed. |
+| Storage allocation and storage state | Does not allocate or inspect `storage_id`. | `sample_set_storage_id()`, `enforce_storage_id_when_check()`, and `allocate_storage_id()` use storage-location and current allocation state. | Database-only: allocating an identifier in Python would be race-prone and could consume or duplicate IDs. |
+| Dynamic allowed values and name maps | Uses cached read-only reference lookups for the narrow implemented rule set. | Foreign keys and `validate_other_values()` use the database's current allowed-value tables and name-map records at write time. | A reference-data change between preflight and insert can cause a later database rejection. Refresh caches per workflow only; do not treat a cached result as a write guarantee. |
+| Other-values validation outside primary sampling method | Detects a missing/blank entry for `primary_sampling_method = Other`. | `validate_other_values()` validates every allowed-values dropdown column, template-header mapping, malformed entries, and values that duplicate an allowed option. | Database-enforced until a name-map-aware preflight expansion is explicitly approved. |
+| Trigger ordering and aggregate feedback | Returns all independent implemented findings in one report. | PostgreSQL executes triggers and constraints in database order and normally returns the first failure only. A different database error may therefore appear before the mapped rule. | This is the intended UX improvement; it is not a semantic mismatch when PostgreSQL rejects the same row for an earlier rule. |
+| No-depth rows | Reports the mapped depth-inference finding. | The conflicting required-insert and depth triggers make all no-depth rows impossible; see the deferred-policy section above. | Documented database-policy issue. Do not enable a no-depth preflight success path until a reviewed migration resolves it. |
+| Equal interval endpoints | Permits equal endpoints because the mirrored trigger only rejects `from > to`. | The table check `"Invalid depth interval"` additionally requires `to > from`. | Documented database-only rejection until the policy is reconciled and parity behavior is updated. |
+| Auditing, logging, and side effects | Performs no write and has no audit side effects. | Database triggers may allocate values or write audit records as part of a real insert/update. | Preflight must remain side-effect free. Transactional parity tests roll back their controlled inserts. |
+
+### Parity interpretation
+
+For this release, **parity** means the following: when preflight reports a
+chosen implemented rule for a synthetic row, SMDB-dev rejects the corresponding
+invalid row under its current database policy. It does not mean that Python can
+prove a later insert will succeed under concurrent changes, dynamic reference
+data, or unimplemented cross-table rules. PostgreSQL is intentionally retained
+as the final authority for those cases.

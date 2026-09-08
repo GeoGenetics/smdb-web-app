@@ -340,7 +340,7 @@ contradictory rule system.
       PostgreSQL constraint/foreign key/trigger/function source.
 - [x] For every parity rule, test one valid and one invalid case against
       SMDB-dev's actual database behavior.
-- [ ] Record expected differences, including database-only concurrency and
+- [x] Record expected differences, including database-only concurrency and
       cross-table conditions.
 - [ ] Add structured logging for unexpected preflight failures without logging
       full uploaded rows or secrets.
