@@ -108,6 +108,13 @@ class FieldSamplePostgresParityTest(unittest.TestCase):
             "template_version is required",
         )
 
+    def test_running_project_title_required(self):
+        self.assert_rule_parity(
+            field_sample_postgres_row(),
+            field_sample_postgres_row(field_sample_running_project_title=None),
+            'null value in column "field_sample_running_project_title"',
+        )
+
     def test_field_sample_id_format(self):
         """Exercise both accepted ID families and the reported malformed shape."""
         sample_number = uuid4().int % 1_000

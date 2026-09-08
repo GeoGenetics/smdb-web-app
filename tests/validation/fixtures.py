@@ -74,6 +74,7 @@ def field_sample_row(**overrides):
     row = {
         "__template_row__": 11,
         "field_sample_id": "CGG_1_000001",
+        "field_sample_running_project_title": "Synthetic field-sample project",
         "template_version": "Version: test",
         "primary_sampling_method": "Tube sampling",
         "other_values": None,

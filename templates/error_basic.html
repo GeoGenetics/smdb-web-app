@@ -14,7 +14,7 @@
 <h3>Error Message:</h3>
 <p>During upload the following errors occured:</p>
 <br>
-{% for error_message in error_messages %} 
+{% for error_message in error_messages|default([], true) %}
 <p>{{ error_message|safe }}</p>
 <br>
 {% endfor %}
@@ -32,4 +32,3 @@
         <button type="submit">To Homepage</button>
     </div>
 </form>
-

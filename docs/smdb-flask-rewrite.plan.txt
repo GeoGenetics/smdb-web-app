@@ -239,6 +239,7 @@ The initial rule set is deliberately limited to rules recently demonstrated by
 real bug reports and uploads:
 
 - [x] required `template_version`;
+- [x] required `field_sample_running_project_title`;
 - [x] field-sample ID uppercase and syntax, including the legacy `CGG` form;
 - [x] allowed-value/foreign-key membership, including `collected_as_field_control`;
 - [x] oldest age estimate greater than or equal to youngest age estimate;

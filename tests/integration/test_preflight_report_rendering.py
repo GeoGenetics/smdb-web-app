@@ -65,6 +65,19 @@ class PreflightReportRenderingTest(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def test_error_page_handles_a_missing_user_error_message(self):
+        """A direct /error request must not fail while rendering its fallback."""
+        with self.flask_app.test_client() as client:
+            with client.session_transaction() as session:
+                session.pop("error_message_user", None)
+                session.pop("error_message_admin", None)
+
+            response = client.get("/error")
+
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("No user-facing error message was available", body)
+
     def test_enforce_report_groups_findings_and_does_not_open_write_connection(self):
         report = self.report_with_findings()
         with TemporaryDirectory() as temporary_directory:

@@ -20,6 +20,7 @@ from validation.field_sample import (
     RULE_INTERVAL_ASCENDING,
     RULE_OTHER_VALUES_REQUIRED,
     RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED,
+    RULE_RUNNING_PROJECT_TITLE_REQUIRED,
     RULE_DISCRETE_DEPTH_ONLY,
     RULE_TEMPLATE_VERSION_REQUIRED,
     RULE_WATER_DEPTH_REQUIRED,
@@ -90,6 +91,20 @@ class FieldSampleValidationTest(unittest.TestCase):
                 RULE_FIELD_SAMPLE_ID_UPPERCASE,
                 RULE_FIELD_SAMPLE_ID_FORMAT_INVALID,
             ],
+        )
+        self.assertEqual([error.template_row for error in report.errors], [11, 12, 13])
+
+    def test_running_project_title_is_required_for_null_blank_and_later_rows(self):
+        report = self.validate(
+            field_sample_row(field_sample_running_project_title=None),
+            field_sample_row(__template_row__=12, field_sample_running_project_title=""),
+            field_sample_row(__template_row__=13, field_sample_running_project_title="  "),
+            field_sample_row(__template_row__=14),
+        )
+
+        self.assertEqual(
+            [error.rule_id for error in report.errors],
+            [RULE_RUNNING_PROJECT_TITLE_REQUIRED] * 3,
         )
         self.assertEqual([error.template_row for error in report.errors], [11, 12, 13])
 

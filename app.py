@@ -1353,12 +1353,19 @@ def error():
     error_messages = session.get('error_message_user')
     error_message_admin = session.get("error_message_admin")
     session['error'] = True
-    #  Might happen if the error is unknown:
-    # if not type(error_messages) == list:
-    #     error_messages = [error_messages]
+    # The error page can be requested directly, or reached while handling a
+    # separate failure. Never let missing or scalar session data mask that
+    # original failure with a Jinja ``NoneType is not iterable`` exception.
+    if error_messages is None:
+        error_messages = [
+            "No user-facing error message was available. "
+            "Use the technical report below when contacting support."
+        ]
+    elif isinstance(error_messages, str):
+        error_messages = [error_messages]
+    elif not isinstance(error_messages, (list, tuple)):
+        error_messages = [str(error_messages)]
 
-    # if not type(error_message_admin) == list:
-    #     error_message_admin = [error_message_admin]
     #error_message = request.args.get('error_message', 'An error occurred.')
     return render_template('error_basic.html', email_send=session.get('email_send'), error_messages=error_messages, error_message_admin=error_message_admin, admin=ADMIN_EMAIL)
 

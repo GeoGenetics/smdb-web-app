@@ -21,6 +21,7 @@ TEMPLATE_ROW_KEY = "__template_row__"
 
 TEMPLATE_COLUMNS = {
     "field_sample_id": "Unique GeoGenetics Sample ID",
+    "field_sample_running_project_title": "Running project title",
     "template_version": "Template version",
     "primary_sampling_method": "Primary sampling method",
     "collected_as_field_control": "Collected as field control",
@@ -38,6 +39,7 @@ TEMPLATE_COLUMNS = {
 }
 
 RULE_TEMPLATE_VERSION_REQUIRED = "field_sample.template_version_required"
+RULE_RUNNING_PROJECT_TITLE_REQUIRED = "field_sample.running_project_title_required"
 RULE_FIELD_SAMPLE_ID_UPPERCASE = "field_sample.field_sample_id_uppercase"
 RULE_FIELD_SAMPLE_ID_FORMAT_INVALID = "field_sample.field_sample_id_format_invalid"
 RULE_PRIMARY_SAMPLING_METHOD_NOT_ALLOWED = (
@@ -164,6 +166,24 @@ def _validate_template_version(row: Mapping[str, Any], report: ValidationReport)
             template_row=_template_row(row),
             template_column=TEMPLATE_COLUMNS["template_version"],
             database_column="template_version",
+            value=value,
+        )
+    )
+
+
+def _validate_running_project_title(row: Mapping[str, Any], report: ValidationReport) -> None:
+    """Report the parser-normalised missing value rejected by the NOT NULL column."""
+    value = row.get("field_sample_running_project_title")
+    if not _is_blank(value):
+        return
+
+    report.add(
+        ValidationError(
+            rule_id=RULE_RUNNING_PROJECT_TITLE_REQUIRED,
+            message="field_sample_running_project_title is required.",
+            template_row=_template_row(row),
+            template_column=TEMPLATE_COLUMNS["field_sample_running_project_title"],
+            database_column="field_sample_running_project_title",
             value=value,
         )
     )
@@ -594,6 +614,7 @@ def validate_field_sample_rows(
     report = ValidationReport()
     for row in rows:
         _validate_template_version(row, report)
+        _validate_running_project_title(row, report)
         _validate_field_sample_id_format(row, report)
         _validate_primary_sampling_method(row, report, reference_data)
         _validate_field_control(row, report, reference_data)

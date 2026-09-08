@@ -8,6 +8,7 @@ boundary.
 | Stable rule ID | PostgreSQL source | Preflight behaviour |
 | --- | --- | --- |
 | `field_sample.template_version_required` | `uploaded_data.field_sample_required_insert_check()` | Reports a missing `template_version`. |
+| `field_sample.running_project_title_required` | `uploaded_data.field_sample.field_sample_running_project_title NOT NULL` | Reports a missing or parser-normalised blank running project title. |
 | `field_sample.field_sample_id_uppercase` | `uploaded_data.field_sample_id_validate_alpha2_only()` | Reports a non-`CGG` field-sample ID containing lowercase characters. |
 | `field_sample.field_sample_id_format_invalid` | `uploaded_data.field_sample_id_validate_alpha2_only()` | Accepts `CGG_X_XXXXXX` or `CCSSS(YYYY|UNKNOWN)NNN`; reports other nonblank ID shapes. |
 | `field_sample.primary_sampling_method_not_allowed` | `fk_primary_sampling_method` | Reports an unknown nonblank `primary_sampling_method`. |
@@ -34,6 +35,11 @@ boundary.
 - The field-control foreign key accepts `NULL`, so its membership rule skips
   blank values. Other required-field rules are outside this initial slice and
   remain enforced by the database.
+- `field_sample_running_project_title` is a direct `NOT NULL` column. The
+  preflight also treats an empty or whitespace-only parser value as missing;
+  the legacy upload parser normally serializes those blank template cells as
+  SQL `NULL`, but PostgreSQL itself does not reject an arbitrary nonempty
+  whitespace string under this constraint alone.
 - PostgreSQL `CHECK` semantics allow a null age endpoint. The preflight also
   skips the age-order comparison if either endpoint is blank. Numeric parsing
   itself remains the legacy parser's responsibility.
