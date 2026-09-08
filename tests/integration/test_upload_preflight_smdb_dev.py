@@ -40,7 +40,9 @@ class SMDBDevUploadPreflightIntegrationTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.synthetic_field_sample_id = f"TESTPREFLIGHT{uuid.uuid4().hex[:16]}"
+        # Use the legacy test-ID form accepted by the real ID trigger. This
+        # test verifies reference-data preflight behavior, not ID formatting.
+        cls.synthetic_field_sample_id = f"CGG_9_{uuid.uuid4().int % 1_000_000:06d}"
         cls.reference_data = WorkflowCachedReferenceDataProvider(
             PostgresReferenceDataProvider()
         )

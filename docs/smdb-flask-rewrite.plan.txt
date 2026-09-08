@@ -188,8 +188,9 @@ Phase 1 — establish test execution and fixtures
 Goal: make new code easy to test and create a reliable baseline for later
 refactoring.
 
-- [x] Document one standard command for the existing and new `unittest` suite,
-      for example `python -m unittest discover -s tests`.
+- [x] Document one standard command for the existing and new `unittest` suite:
+      `bash scripts/run_tests.sh`; it runs SMDB-dev integration tests by
+      default and supports `--skip-live-db` for framework-free coverage.
 - [x] Ensure tests can import pure validation modules without importing
       `app.py`, opening a database connection, or requiring an SSH tunnel.
 - [x] Add small synthetic row dictionaries/dataframes for valid and invalid
@@ -329,7 +330,7 @@ path to the legacy flow.
       label category-driven sampling-method findings as a selected value rather
       than an offending value. Keep this metadata out of database-bound frames
       and cover the workflow and rendered-report behaviour with tests.
-- [ ] Obtain user acceptance from field-sample uploaders using non-production
+- [x] Obtain user acceptance from field-sample uploaders using non-production
       test data. Follow `docs/field-sample-preflight-user-acceptance.md` and
       retain its completed acceptance record.
 
@@ -352,7 +353,7 @@ contradictory rule system.
       cross-table conditions.
 - [x] Add structured logging for unexpected preflight failures without logging
       full uploaded rows or secrets.
-- [ ] Measure: number of preflight errors per upload, legacy database errors
+- [x] Measure: number of preflight errors per upload, legacy database errors
       reached after preflight, and false-positive reports.
 - [ ] Keep preflight disabled or shadow-only in production until development
       parity and user acceptance are recorded.
