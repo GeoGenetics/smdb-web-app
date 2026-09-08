@@ -48,10 +48,10 @@ password variables) when separate roles are available.
 
 ## Tests
 
-Run the test suite from the repository root after activating the virtual
-environment and loading the development configuration. The current legacy
-parser imports database configuration, so the SSH tunnel and `.env` settings
-must be available for the full suite.
+Run the complete test suite from the repository root after activating the
+virtual environment, loading the development configuration, and starting the
+SMDB-dev SSH tunnel. The runner enables the opt-in live tests and refuses a
+non-development configuration or a port other than `5433`.
 
 ```bash
 source .venv/bin/activate
@@ -59,15 +59,19 @@ set -a
 source .env
 set +a
 
-python -m unittest discover -s tests -t . -p '*.py'
+bash scripts/run_tests.sh
 ```
 
-New preflight-validation tests must remain independently runnable without a
-web server, database connection, SSH tunnel, or `.env` file:
+To run only framework-free tests, with no web server, database connection,
+SSH tunnel, or `.env` file, use:
 
 ```bash
-python -m unittest discover -s tests/validation -p 'test_*.py'
+bash scripts/run_tests.sh --skip-live-db
 ```
+
+The pure-test mode deliberately omits `tests/date_parser_test.py` and
+`tests/integration/`: the legacy parser currently opens a database connection
+during import. The full SMDB-dev run covers those tests.
 
 The SMDB-dev preflight integration checks are intentionally opt-in. They use
 real read-only reference-data lookups through the local port-`5433` tunnel and
