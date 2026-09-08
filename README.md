@@ -82,7 +82,8 @@ SMDB_RUN_INTEGRATION_TESTS=1 \
   python -m unittest \
     tests.integration.test_upload_preflight_smdb_dev \
     tests.integration.test_preflight_report_rendering \
-    tests.integration.test_parse_floats_diagnostics
+    tests.integration.test_parse_floats_diagnostics \
+    tests.integration.test_field_sample_postgres_parity
 ```
 
 Field-sample uploader acceptance is a separate human step; follow

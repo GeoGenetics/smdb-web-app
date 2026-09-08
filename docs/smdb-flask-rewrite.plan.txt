@@ -336,9 +336,9 @@ Phase 6 — parity, observability, and controlled adoption
 Goal: demonstrate that preflight improves feedback without creating a second,
 contradictory rule system.
 
-- [ ] Build a rule-parity matrix mapping each implemented Python rule to its
+- [x] Build a rule-parity matrix mapping each implemented Python rule to its
       PostgreSQL constraint/foreign key/trigger/function source.
-- [ ] For every parity rule, test one valid and one invalid case against
+- [x] For every parity rule, test one valid and one invalid case against
       SMDB-dev's actual database behavior.
 - [ ] Record expected differences, including database-only concurrency and
       cross-table conditions.

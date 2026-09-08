@@ -42,6 +42,14 @@ boundary.
   broad context is not marine or freshwater. That converse rule is deliberately
   deferred: this checkpoint implements only the planned aquatic-context
   requirement and documents the gap rather than silently expanding scope.
+- PostgreSQL has no valid no-depth state; see the dedicated deferred-policy
+  section below. The relevant parity tests verify database rejection, but
+  cannot supply a valid control until the conflict is resolved.
+- PostgreSQL has the additional table check `"Invalid depth interval"`, which
+  requires `field_sampling_interval_to > field_sampling_interval_from`.
+  The depth trigger and Python preflight permit equal endpoints (`from <= to`).
+  The parity test exercises strictly ascending endpoints; equality remains a
+  documented database-only rejection until the policy is reconciled.
 - `Other (specify in "Other values" column)`, `Data not collected`, and any
   other approved method outside the trigger's three fixed category arrays do
   not receive a category-specific finding. They receive the generic depth
@@ -58,3 +66,70 @@ boundary.
 - A reference-data provider failure is an operational error and propagates as
   `ReferenceDataLookupError`; it is never converted into an allowed-value
   result or a user-data validation finding.
+
+## Deferred database policy issue: no-depth rows
+
+Status: unresolved database-policy contradiction, discovered during Phase 6
+parity testing. Do not change either trigger merely to make the Python tests
+pass; decide the intended metadata policy first and implement a reviewed
+migration later.
+
+Two database triggers currently impose mutually exclusive requirements:
+
+- `uploaded_data.check_depth_conditionals()` requires
+  `depth_inference_method` to be `NULL` whenever all of the following are
+  `NULL`:
+  - `field_sampling_depth_discrete`;
+  - `field_sampling_interval_from`;
+  - `field_sampling_interval_to`.
+- `uploaded_data.field_sample_required_insert_check()` unconditionally rejects
+  every insert whose `depth_inference_method` is `NULL`.
+
+Consequently, neither possible value can produce a valid no-depth row:
+
+| Depth fields | `depth_inference_method` | PostgreSQL result |
+| --- | --- | --- |
+| all empty | empty | `field_sample_required_insert_check()` rejects the row: `depth_inference_method is required` |
+| all empty | supplied | `check_depth_conditionals()` rejects the row: `depth_inference_method should not be filled when no depth fields are filled` |
+
+### Affected cases
+
+- `Filter sampling`, whose category rule explicitly requires no discrete or
+  interval depth;
+- air and water sampling media, whose depth trigger explicitly forbids all
+  depth fields;
+- any future workflow that correctly represents a sample without a sampling
+  depth;
+- the Python rule
+  `field_sample.depth_inference_method_without_depth`, which accurately mirrors
+  the depth trigger but cannot by itself lead to a database-acceptable row.
+
+This does **not** make every freshwater or marine-context row impossible. A
+row may have a freshwater broad/local environmental-context pair, a water
+depth, and a non-water sampling medium such as sediment with a normal sampling
+depth. That is the valid control used by the water-depth parity test.
+
+### Current test treatment
+
+The SMDB-dev parity suite deliberately does the following:
+
+- verifies that invalid Filter rows containing a depth are rejected by
+  `check_depth_conditionals()`;
+- verifies that a no-depth row with a supplied depth-inference method is
+  rejected by `check_depth_conditionals()`;
+- does not claim that a valid no-depth control exists, because PostgreSQL
+  rejects the alternative with an empty depth-inference method as well.
+
+The relevant tests therefore document actual database behavior rather than
+masking it with a test-only bypass or disabled trigger.
+
+### Decision required before a later fix
+
+The database owners need to decide whether no-depth samples are legitimate
+metadata. If they are, a future reviewed migration should make the required
+insert rule conditional—for example, require `depth_inference_method` only
+when a depth is supplied—while retaining the existing category and generic
+depth checks. If they are not legitimate, the template dropdown choices and
+user-facing guidance for Filter/air/water cases must be reconciled with that
+policy instead. Either option needs production-impact review, a migration, and
+new SMDB-dev parity cases before deployment.
