@@ -356,7 +356,7 @@ contradictory rule system.
       full uploaded rows or secrets.
 - [x] Measure: number of preflight errors per upload, legacy database errors
       reached after preflight, and false-positive reports.
-- [ ] Keep preflight disabled or shadow-only in production until development
+- [x] Keep preflight disabled or shadow-only in production until development
       parity and user acceptance are recorded.
 
 Exit criterion: preflight is proven reliable for the chosen field-sample rules

@@ -1,0 +1,83 @@
+Production web-service hardening plan
+=====================================
+
+Context
+-------
+
+The current production deployment runs ``python app.py`` under systemd. This
+means systemd provides restart supervision, but Flask's built-in development
+server handles HTTP requests. The unit also runs as ``root``, embeds database
+credentials directly, exposes the app on all interfaces, and regenerates the
+Flask session secret on every restart.
+
+The application is currently available only inside the University network.
+That network boundary is accepted as a temporary, higher-level control while
+the Flask rewrite and application migration continue. It does not remove the
+need for the application-level work listed below, and must not be interpreted
+as making the current deployment suitable for public-network exposure.
+
+Scope and sequence
+------------------
+
+1. Inventory the current production process and dependencies.
+
+   - [ ] Document the systemd unit, listening port, reverse-proxy status, app
+         writable directories, database roles, and outbound-email dependency.
+   - [ ] Identify startup work currently performed only under
+         ``if __name__ == '__main__'`` (including query-file cleanup), and
+         confirm whether each action is safe with multiple worker processes.
+   - [ ] Define a health check that does not disclose data or require a write.
+
+2. Make application startup compatible with a production WSGI server.
+
+   - [ ] Extract startup work into an explicit, testable bootstrap function;
+         do not rely on executing ``app.py`` as a script.
+   - [ ] Add a WSGI entry point that exposes the Flask application without
+         enabling Flask debug mode or the built-in development server.
+   - [ ] Add tests for bootstrap idempotency and for importing the WSGI entry
+         point without destructive runtime cleanup.
+
+3. Replace the development server in a non-production environment first.
+
+   - [ ] Add and pin a Linux-appropriate WSGI server dependency (Gunicorn is
+         the expected candidate).
+   - [ ] Run the app through the WSGI server against SMDB-dev and verify the
+         existing upload, download, session, email-disabled, and preflight
+         workflows.
+   - [ ] Confirm that file/session handling remains correct with the selected
+         worker model before using more than one worker.
+
+4. Improve service isolation and configuration handling.
+
+   - [ ] Create a dedicated, unprivileged ``smdb-webapp`` service account with
+         access only to required application and writable runtime paths.
+   - [ ] Move database credentials, Flask secret material, and mail settings
+         into a root-owned ``EnvironmentFile`` with mode ``0600``; rotate the
+         currently exposed database password.
+   - [ ] Load a stable Flask ``SECRET_KEY`` from that environment file so
+         application restarts do not invalidate all sessions.
+   - [ ] Bind the WSGI server to localhost or a Unix socket rather than
+         ``0.0.0.0``.
+   - [ ] Use ``Restart=on-failure`` and explicit systemd working/runtime
+         directories, then add only compatible systemd sandboxing controls
+         after testing upload and download paths.
+
+5. Add an internal reverse proxy and controlled production rollout.
+
+   - [ ] Put nginx (or the University-supported equivalent) in front of the
+         WSGI server for TLS termination, request-size limits, proxy timeouts,
+         and static-file delivery where appropriate.
+   - [ ] Keep direct WSGI access restricted to localhost/the proxy.
+   - [ ] Test the complete change on a non-production host, including service
+         restart, log visibility, rollback, and an upload with a small
+         non-production sheet.
+   - [ ] Schedule a production maintenance window, retain the known-working
+         unit as a rollback artifact, and document the exact rollback steps.
+
+Exit criterion
+--------------
+
+Production is served by a dedicated unprivileged account through a production
+WSGI server and internal reverse proxy; credentials are no longer embedded in
+the systemd unit; sessions survive ordinary service restarts; and the complete
+upload/download workflow has passed a controlled non-production rehearsal.
