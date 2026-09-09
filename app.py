@@ -45,6 +45,7 @@ from exception_utils import delete_files, delete_db_entries
 from utils.CustomExceptions import DontTriggerFileDeletion
 from utils import parsers
 import decorators
+from routes.uploads import register_upload_routes
 from datetime import datetime
 import uuid
 from geopy.distance import geodesic
@@ -91,6 +92,10 @@ logger = log_util.setup()
 
 # # Set log level
 app.logger.setLevel(logging.DEBUG)
+
+# Phase 7 route extraction begins with the small duplicate-warning continuation
+# route. Registration preserves its existing URL and unqualified endpoint name.
+register_upload_routes(app, log_info=decorators.log_info)
 
 
 def run_upload_preflight_for_rollout(*, clean_sheets, parser_options, location_metadata=None):
@@ -1295,11 +1300,6 @@ def make_field_sample_dirs(clean_sheets, table_splits):
 @decorators.log_info(app)
 def cancel_upload():
     return redirect(url_for("index"))
-
-@app.route('/accept_warning', methods=['POST'])
-@decorators.log_info(app)
-def accept_warning():
-    return redirect(url_for("confirmation_request"))
 
 @app.route('/success', methods=['GET'])
 @decorators.log_info(app)

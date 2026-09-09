@@ -5,6 +5,12 @@ This inventory is the Phase 7 baseline for extracting upload routes from
 specification. A route must preserve this behavior until a separately reviewed
 change says otherwise.
 
+## Extraction progress
+
+| Date | Route | Change | Contract test |
+| --- | --- | --- | --- |
+| 2026-09-09 | `POST /accept_warning` | Moved from `app.py` to `routes/uploads.py`; registered directly on the application so its URL and endpoint name remain `accept_warning`. | `tests/integration/test_upload_route_extraction.py` verifies the URL, POST method, and redirect to `/confirmation_request`. |
+
 ## Scope
 
 The upload state machine begins at the upload form on `/`, accepts a file at
