@@ -368,15 +368,15 @@ Phase 7 — route extraction and legacy retirement (separate approval)
 
 Goal: reduce `app.py` only after behavior-equivalent services and tests exist.
 
-- [ ] Create a route-ownership inventory before moving code: route URL,
+- [x] Create a route-ownership inventory before moving code: route URL,
       methods, current endpoint name, decorators, templates, session keys,
       filesystem side effects, and downstream redirects/downloads.
 - [ ] Move the relevant upload endpoints to `routes/uploads.py` one route at a
       time, preserving URLs, methods, template context, and response behavior.
 - [ ] Move the upload flow as an explicit compatible group: `/upload`,
-      `/confirmed`, and the preflight TSV-download endpoint. Preserve
-      `url_for(...)` compatibility or update every internal reference in the
-      same change.
+      `/confirmed`, and the browser-generated preflight TSV-download contract.
+      Preserve `url_for(...)` compatibility or update every internal reference
+      in the same change.
 - [ ] Register the blueprint/application routes from `app.py` without changing
       unrelated routes.
 - [ ] Ensure each moved route is registered exactly once; do not leave a
