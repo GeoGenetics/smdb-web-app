@@ -29,8 +29,8 @@ SMDB-dev environment used.
 ## Acceptance record
 
 | Date | Participant or role | Invalid-report feedback | Valid-upload result | Accepted? | Follow-up |
-| --- | --- | --- | --- | --- | --- |
-| | | | | | |
+| 2026-09-08 | Carl Baden | Invalid rows correctly reported | Valid filed sample sheet succesfuly uploaded | Yes | Fix minor non preflight bugs |
+| 2026-09-08 | Julian Regalado | Invalid row report correctly displayed in webapp | Valid field sample sheet succesfully uploaded | Yes | None |
 | | | | | | |
 
 Mark the Phase 5 user-acceptance checklist item complete only after the

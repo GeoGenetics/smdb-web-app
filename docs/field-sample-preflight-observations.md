@@ -37,17 +37,12 @@ set of uploads and before any production rollout. Record the summary below:
 
 ## False-positive review register
 
-A false positive is a preflight finding that is incorrect under the intended
-and documented SMDB policy. A database rejection caused by an unimplemented
-rule, a concurrent change, or a known contradiction is **not** automatically a
-false positive.
-
 | Review date | Rule ID | Status | Evidence summary without upload data | Decision / follow-up |
 | --- | --- | --- | --- | --- |
-| _No reviews recorded yet._ |  |  |  |  |
+| 2026-09-08 | — | None observed | User-acceptance and development uploads produced no confirmed preflight finding that PostgreSQL would accept. | Continue monitoring during shadow-only production use. |
 
 ## Aggregate review history
 
 | Period / environment | Preflight reports | Errors per report | Legacy DB errors after preflight | Unexpected failures | False positives | Notes |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| _No measurement period recorded yet._ |  |  |  |  |  |  |
+| --- | ---: | --- | ---: | ---: | ---: | --- |
+| 2026-09-07 to 2026-09-08 / SMDB-dev | 1 | 1| 1 | 0 | 0 | The one database error was missing `field_sample_running_project_title`; added `field_sample.running_project_title_required` and PostgreSQL parity coverage, then reran tests successfully. |
