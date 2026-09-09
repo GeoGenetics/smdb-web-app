@@ -5,6 +5,7 @@ sys.path.append(parent_dir)
 
 import pandas as pd
 import psycopg2
+from psycopg2 import sql
 
 
 def upload_id_filter(schema, table, upload_id):
@@ -193,6 +194,7 @@ def count_rows(sql_alch_db_config, table_name):
     
     conn = psycopg2.connect(
         host=sql_alch_db_config['host'],
+        port=sql_alch_db_config['port'],
         database=database,
         user=sql_alch_db_config['user'],
         password=sql_alch_db_config['password'],
@@ -203,7 +205,10 @@ def count_rows(sql_alch_db_config, table_name):
     
     try:
         # Execute SQL query to count rows of the table
-        query = f'SELECT COUNT(*) FROM \"{database}\".\"{schema}\".\"{table_name}\";'
+        query = sql.SQL('SELECT COUNT(*) FROM {}.{}').format(
+            sql.Identifier(schema),
+            sql.Identifier(table_name),
+        )
         cursor.execute(query)
         
         # Fetch the result
@@ -285,6 +290,3 @@ def execute_query(query, connection, params=None, get_cols=False):
                     # For INSERT, UPDATE, DELETE queries
                     conn.commit()
                     return cur.rowcount
-
-
-    
