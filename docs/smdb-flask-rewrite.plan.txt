@@ -368,11 +368,28 @@ Phase 7 — route extraction and legacy retirement (separate approval)
 
 Goal: reduce `app.py` only after behavior-equivalent services and tests exist.
 
+- [ ] Create a route-ownership inventory before moving code: route URL,
+      methods, current endpoint name, decorators, templates, session keys,
+      filesystem side effects, and downstream redirects/downloads.
 - [ ] Move the relevant upload endpoints to `routes/uploads.py` one route at a
       time, preserving URLs, methods, template context, and response behavior.
+- [ ] Move the upload flow as an explicit compatible group: `/upload`,
+      `/confirmed`, and the preflight TSV-download endpoint. Preserve
+      `url_for(...)` compatibility or update every internal reference in the
+      same change.
 - [ ] Register the blueprint/application routes from `app.py` without changing
       unrelated routes.
+- [ ] Ensure each moved route is registered exactly once; do not leave a
+      duplicate legacy route active in `app.py`.
 - [ ] Maintain an explicit before/after route test for every moved endpoint.
+- [ ] Preserve preflight mode behavior during extraction: `off`, `shadow`, and
+      field-sample-only `enforce` must have identical outcomes before and
+      after the route move.
+- [ ] Preserve the current session-directory and uploaded-file cleanup
+      lifecycle, including error paths and enforce-blocked uploads.
+- [ ] Keep database/configuration initialization outside route imports so
+      importing `routes.uploads` remains testable and does not create a
+      connection or mutate filesystem state.
 - [ ] Remove a legacy helper only after its replacement is in production use,
       covered by tests, and approved for removal.
 - [ ] Do not begin this phase merely because the new structure exists; require
