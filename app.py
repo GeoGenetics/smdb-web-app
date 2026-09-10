@@ -93,10 +93,6 @@ logger = log_util.setup()
 # # Set log level
 app.logger.setLevel(logging.DEBUG)
 
-# Phase 7 route extraction begins with the small duplicate-warning continuation
-# route. Registration preserves its existing URL and unqualified endpoint name.
-register_upload_routes(app, log_info=decorators.log_info)
-
 
 def run_upload_preflight_for_rollout(*, clean_sheets, parser_options, location_metadata=None):
     """Apply the configured development rollout mode to parsed legacy sheets.
@@ -248,9 +244,7 @@ def index():
                                SHEET_TYPES=SHEET_TYPES, ALLOWED_DATE_FORMATS=ALLOWED_DATE_FORMATS, ALLOWED_ENCODINGS=ALLOWED_ENCODINGS)         
 
 
-@app.route('/upload', methods=['POST'])
-@decorators.log_info(app)
-def upload_file():
+def _legacy_upload_file_impl():
     with upload_lock:
         # logger.info('Running: ' + str(index.__name__))
         warning_master_id_rows_in_db = []
@@ -996,9 +990,7 @@ def confirmation_request():
                            clean_sheets=clean_sheets, summaries=summaries, file_name=file_name, database_table_name=database_table_name)
 
 # TODO: lock this function so only 1 can happen at a time (alternatively 1 upload per table at a time)
-@app.route('/confirmed', methods=['POST'])
-@decorators.log_info(app)
-def confirmed():
+def _legacy_confirmed_impl():
     with lock:
         path_to_excel_receipt = os.path.join(session.get('session_dir'), 'excel_receipts', 'excel_receipt.xlsx')
 
@@ -1262,6 +1254,17 @@ This is an automated e-mail. If you have any question write to {ADMIN_EMAIL}.
         
                         
         return redirect(url_for("success")) 
+
+
+# Phase 7 route extraction: the public Flask endpoints are registered from
+# routes/uploads.py. Their retained implementations stay here temporarily so
+# behavior can be proven unchanged before a separately approved retirement.
+register_upload_routes(
+    app,
+    log_info=decorators.log_info,
+    upload_file_handler=_legacy_upload_file_impl,
+    confirmed_handler=_legacy_confirmed_impl,
+)
 
 def make_field_sample_dirs(clean_sheets, table_splits):
     try:

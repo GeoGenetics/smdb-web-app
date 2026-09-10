@@ -40,3 +40,22 @@ class UploadRouteExtractionTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response.headers["Location"].endswith("/confirmation_request"))
+
+    def test_upload_flow_endpoints_are_registered_from_the_route_module(self):
+        """The real application keeps its public endpoint names after extraction."""
+        with self.flask_app.test_request_context():
+            self.assertEqual(self.app_module.url_for("upload_file"), "/upload")
+            self.assertEqual(self.app_module.url_for("confirmed"), "/confirmed")
+
+        self.assertEqual(
+            self.flask_app.view_functions["accept_warning"].__module__,
+            "routes.uploads",
+        )
+        self.assertEqual(
+            self.flask_app.view_functions["upload_file"].__module__,
+            "routes.uploads",
+        )
+        self.assertEqual(
+            self.flask_app.view_functions["confirmed"].__module__,
+            "routes.uploads",
+        )

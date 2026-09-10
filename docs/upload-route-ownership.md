@@ -10,6 +10,7 @@ change says otherwise.
 | Date | Route | Change | Contract test |
 | --- | --- | --- | --- |
 | 2026-09-09 | `POST /accept_warning` | Moved from `app.py` to `routes/uploads.py`; registered directly on the application so its URL and endpoint name remain `accept_warning`. | `tests/integration/test_upload_route_extraction.py` verifies the URL, POST method, and redirect to `/confirmation_request`. |
+| 2026-09-09 | `POST /upload`, `POST /confirmed` | Public Flask routes moved to `routes/uploads.py`, preserving the endpoint names `upload_file` and `confirmed`. They delegate to retained `_legacy_*_impl` helpers in `app.py` until legacy retirement is approved. | `tests/routes/test_uploads.py` verifies URLs, POST-only methods, and handler delegation; the existing preflight report route test continues to exercise `/confirmed` through the real application. |
 
 ## Scope
 

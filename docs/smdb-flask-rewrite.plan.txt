@@ -371,9 +371,9 @@ Goal: reduce `app.py` only after behavior-equivalent services and tests exist.
 - [x] Create a route-ownership inventory before moving code: route URL,
       methods, current endpoint name, decorators, templates, session keys,
       filesystem side effects, and downstream redirects/downloads.
-- [ ] Move the relevant upload endpoints to `routes/uploads.py` one route at a
+- [x] Move the relevant upload endpoints to `routes/uploads.py` one route at a
       time, preserving URLs, methods, template context, and response behavior.
-- [ ] Move the upload flow as an explicit compatible group: `/upload`,
+- [x] Move the upload flow as an explicit compatible group: `/upload`,
       `/confirmed`, and the browser-generated preflight TSV-download contract.
       Preserve `url_for(...)` compatibility or update every internal reference
       in the same change.

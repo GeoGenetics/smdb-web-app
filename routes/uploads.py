@@ -18,6 +18,8 @@ def register_upload_routes(
     app: Flask,
     *,
     log_info: Callable[[Flask], Callable[[Callable[..., Any]], Callable[..., Any]]],
+    upload_file_handler: Callable[[], Any] | None = None,
+    confirmed_handler: Callable[[], Any] | None = None,
 ) -> None:
     """Register extracted upload routes without changing their public contract."""
 
@@ -26,3 +28,19 @@ def register_upload_routes(
     def accept_warning():
         """Continue from the duplicate-warning page to upload confirmation."""
         return redirect(url_for("confirmation_request"))
+
+    if upload_file_handler is not None:
+
+        @app.route("/upload", methods=["POST"])
+        @log_info(app)
+        def upload_file():
+            """Delegate parsing/upload preparation to its retained legacy helper."""
+            return upload_file_handler()
+
+    if confirmed_handler is not None:
+
+        @app.route("/confirmed", methods=["POST"])
+        @log_info(app)
+        def confirmed():
+            """Delegate confirmation/write behavior to its retained legacy helper."""
+            return confirmed_handler()
