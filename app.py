@@ -44,6 +44,7 @@ from constants.misc_constants import UPLOADED_FILES, ALLOWED_EXTENSIONS, ALLOWED
 from exception_utils import delete_files, delete_db_entries
 from utils.CustomExceptions import DontTriggerFileDeletion
 from utils import parsers
+from utils.field_sample_template import find_header_row_position
 import decorators
 from routes.uploads import register_upload_routes
 from datetime import datetime
@@ -531,13 +532,22 @@ def _legacy_upload_file_impl():
                 
                 # Remove column specifications header, if it exists. This is only relevant for the field_sample table.
                 if split_database_table_name == data.field_sample():
-                    # Reset the header using row 9, then drop all spec rows above and the instruction row
-                    sheet.columns = sheet.iloc[8]
+                    # Locate the actual header by its required Template version
+                    # column. Current templates may contain more instruction
+                    # rows than earlier versions, so a fixed row number is not
+                    # a stable layout contract.
+                    template_header_position = find_header_row_position(
+                        sheet,
+                        template_version_column=data.field_sample.template_version(
+                            template=True
+                        ),
+                    )
+                    sheet.columns = sheet.iloc[template_header_position]
                     template_column_numbers = {
                         column_name: position
                         for position, column_name in enumerate(sheet.columns, start=1)
                     }
-                    sheet = sheet.iloc[9:].copy()
+                    sheet = sheet.iloc[template_header_position + 1:].copy()
                     source_row_numbers = source_row_numbers.loc[sheet.index].reset_index(drop=True)
                     sheet = sheet.reset_index(drop=True)
                     sheet = sheet.drop(columns=sheet.columns[0])
