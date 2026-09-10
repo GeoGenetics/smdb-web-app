@@ -6,6 +6,10 @@ from math import nan
 from tests.validation.fixtures import common_reference_data, field_sample_row
 from validation.field_sample import (
     RULE_AGE_INTERVAL_ORDER,
+    RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_NOT_ALLOWED,
+    RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_REQUIRED,
+    RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_NOT_ALLOWED,
+    RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_REQUIRED,
     RULE_DEPTH_INFERENCE_NOT_ALLOWED,
     RULE_DEPTH_INFERENCE_REQUIRED,
     RULE_DEPTH_REQUIRED,
@@ -15,6 +19,9 @@ from validation.field_sample import (
     RULE_FIELD_SAMPLE_ID_FORMAT_INVALID,
     RULE_FIELD_SAMPLE_ID_UPPERCASE,
     RULE_FIELD_CONTROL_NOT_ALLOWED,
+    RULE_ARCHAEOLOGICAL_REGISTRY_NUMBER_NOT_ALLOWED,
+    RULE_FEATURE_FUNCTION_CLASS_NOT_ALLOWED,
+    RULE_FEATURE_FUNCTION_CLASS_REQUIRED,
     RULE_INTERVAL_DEPTH_ONLY,
     RULE_INTERVAL_ENDPOINTS_PAIRED,
     RULE_INTERVAL_ASCENDING,
@@ -484,6 +491,87 @@ class FieldSampleValidationTest(unittest.TestCase):
         )
         self.assertEqual(reports[2].findings, ())
         self.assertEqual(reports[3].findings, ())
+
+    def test_archaeological_rows_require_all_context_fields_and_later_rows_continue(self):
+        report = self.validate(
+            field_sample_row(
+                primary_depositional_environment="Anthropogenic / archaeological",
+            ),
+            field_sample_row(
+                __template_row__=12,
+                secondary_depositional_environment="Anthropogenic / archaeological",
+                archaeological_context_description="Synthetic context description",
+                archaeological_context_identifier="Synthetic context ID",
+                feature_function_class="Synthetic feature class",
+            ),
+            field_sample_row(
+                __template_row__=13,
+                local_scale_environmental_context="Archaeological site [ENVO:00000564]",
+                broad_scale_environmental_context="Terrestrial biome [ENVO:00000446]",
+            ),
+        )
+
+        self.assertEqual(
+            {finding.rule_id for finding in report.group_by_row()[11]},
+            {
+                RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_REQUIRED,
+                RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_REQUIRED,
+                RULE_FEATURE_FUNCTION_CLASS_REQUIRED,
+            },
+        )
+        self.assertNotIn(12, report.group_by_row())
+        self.assertEqual(
+            {finding.rule_id for finding in report.group_by_row()[13]},
+            {
+                RULE_ENVIRONMENT_CONTEXT_PAIR_INVALID,
+                RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_REQUIRED,
+                RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_REQUIRED,
+                RULE_FEATURE_FUNCTION_CLASS_REQUIRED,
+            },
+        )
+
+    def test_non_archaeological_rows_reject_archaeological_only_fields_when_all_conditions_are_false(self):
+        report = self.validate(
+            field_sample_row(
+                secondary_depositional_environment="Lacustrine",
+                archaeological_context_description="Synthetic description",
+                archaeological_context_identifier="Synthetic identifier",
+                feature_function_class="Synthetic feature class",
+                archaeological_registry_number="Synthetic registry number",
+            ),
+            field_sample_row(
+                __template_row__=12,
+                archaeological_context_description=" ",
+                archaeological_context_identifier=None,
+                feature_function_class="",
+                archaeological_registry_number=None,
+            ),
+        )
+
+        self.assertEqual(
+            {finding.rule_id for finding in report.group_by_row()[11]},
+            {
+                RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_NOT_ALLOWED,
+                RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_NOT_ALLOWED,
+                RULE_FEATURE_FUNCTION_CLASS_NOT_ALLOWED,
+                RULE_ARCHAEOLOGICAL_REGISTRY_NUMBER_NOT_ALLOWED,
+            },
+        )
+        self.assertNotIn(12, report.group_by_row())
+
+    def test_null_archaeological_condition_skips_both_database_branches(self):
+        """Mirror PostgreSQL: false OR NULL OR false is NULL, not false."""
+        report = self.validate(
+            field_sample_row(
+                secondary_depositional_environment=None,
+                archaeological_context_description="Synthetic description",
+                archaeological_context_identifier="Synthetic identifier",
+                feature_function_class="Synthetic feature class",
+                archaeological_registry_number="Synthetic registry number",
+            )
+        )
+
+        self.assertEqual(report.findings, ())
 
     def test_multiple_errors_are_aggregated_and_later_rows_are_still_checked(self):
         report = self.validate(

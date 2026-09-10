@@ -26,6 +26,13 @@ boundary.
 | `field_sample.depth_inference_method_required` | `uploaded_data.check_depth_conditionals()` | Requires `depth_inference_method` when discrete depth or interval top depth is supplied. |
 | `field_sample.depth_inference_method_without_depth` | `uploaded_data.check_depth_conditionals()` | Rejects `depth_inference_method` when every depth field is empty. |
 | `field_sample.other_values_required_for_primary_sampling_method` | `uploaded_data.validate_other_values()` | Requires a nonblank Other values field when primary sampling method is Other. |
+| `field_sample.archaeological_context_description_required` | `uploaded_data.check_archaeological_conditionals()` | Requires an archaeological context description when either depositional-environment field is Anthropogenic / archaeological or the local context is one of the trigger's archaeological contexts. |
+| `field_sample.archaeological_context_identifier_required` | `uploaded_data.check_archaeological_conditionals()` | Requires an archaeological context identifier under the same archaeological condition. |
+| `field_sample.feature_function_class_required` | `uploaded_data.check_archaeological_conditionals()` | Requires a feature/function class under the same archaeological condition. |
+| `field_sample.archaeological_context_description_not_allowed` | `uploaded_data.check_archaeological_conditionals()` | Rejects an archaeological context description only when every trigger condition is explicitly false. |
+| `field_sample.archaeological_context_identifier_not_allowed` | `uploaded_data.check_archaeological_conditionals()` | Rejects an archaeological context identifier only when every trigger condition is explicitly false. |
+| `field_sample.feature_function_class_not_allowed` | `uploaded_data.check_archaeological_conditionals()` | Rejects a feature/function class only when every trigger condition is explicitly false. |
+| `field_sample.archaeological_registry_number_not_allowed` | `uploaded_data.check_archaeological_conditionals()` | Rejects an archaeological site registry number only when every trigger condition is explicitly false. |
 
 ## Intentional differences and boundaries
 
@@ -68,6 +75,19 @@ boundary.
   missing/blank case for `primary_sampling_method` only; malformed entries,
   mismatched column entries, and Other values in other dropdown columns remain
   database-enforced until name-map-aware validation is added.
+- `check_archaeological_conditionals()` checks only SQL `NULL`. Preflight also
+  treats empty and whitespace-only parser values as absent, which matches the
+  legacy parser's intended handling of empty template cells. PostgreSQL raises
+  its first failure in a fixed order; preflight returns all independently
+  missing or disallowed archaeological fields at once.
+- The trigger's archaeological predicate uses SQL `OR` with nullable fields.
+  If no condition is true but at least one is `NULL`—for example, primary
+  environment is Lacustrine, secondary environment is empty, and local context
+  is Forest—the expression is `NULL`, not false. Both trigger branches are
+  skipped, so PostgreSQL accepts archaeological-only fields on that row.
+  Preflight deliberately mirrors this current behavior rather than creating a
+  false-positive rejection. This is a database-policy defect worth resolving
+  in a future reviewed migration.
 - This slice deliberately does not yet reproduce all requirements in
   `field_sample_required_insert_check()` or all field-sample triggers. Those
   rules remain database-enforced until a later, explicitly documented slice.

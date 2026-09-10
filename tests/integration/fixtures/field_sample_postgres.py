@@ -88,3 +88,18 @@ def uncategorized_method_row(**overrides):
     row = field_sample_postgres_row(primary_sampling_method="Data not collected")
     row.update(overrides)
     return row
+
+
+def archaeological_row(**overrides):
+    """Return a database-valid anthropogenic/archaeological fixture row."""
+    row = field_sample_postgres_row(
+        primary_depositional_environment="Anthropogenic / archaeological",
+        archaeological_context_description="Synthetic archaeological context.",
+        archaeological_context_identifier="SYNTHETIC-CONTEXT-001",
+        feature_function_class=(
+            "Accreted archaeological layers (floors, collapse layers and "
+            "leveling fills and middens etc.)"
+        ),
+    )
+    row.update(overrides)
+    return row

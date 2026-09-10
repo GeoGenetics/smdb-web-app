@@ -14,6 +14,7 @@ import psycopg2
 from psycopg2 import sql
 
 from tests.integration.fixtures.field_sample_postgres import (
+    archaeological_row,
     aquatic_row,
     field_sample_postgres_row,
     uncategorized_method_row,
@@ -289,4 +290,68 @@ class FieldSamplePostgresParityTest(unittest.TestCase):
                 other_values=None,
             ),
             "no corresponding entry was found",
+        )
+
+    def test_archaeological_context_description_is_required(self):
+        self.assert_rule_parity(
+            archaeological_row(),
+            archaeological_row(archaeological_context_description=None),
+            "archaeological_context_description is required",
+        )
+
+    def test_archaeological_context_identifier_is_required(self):
+        self.assert_rule_parity(
+            archaeological_row(),
+            archaeological_row(archaeological_context_identifier=None),
+            "archaeological_context_identifier is required",
+        )
+
+    def test_feature_function_class_is_required_for_archaeological_rows(self):
+        self.assert_rule_parity(
+            archaeological_row(),
+            archaeological_row(feature_function_class=None),
+            "feature_function_class is required",
+        )
+
+    def test_archaeological_context_description_is_not_allowed_elsewhere(self):
+        self.assert_rule_parity(
+            field_sample_postgres_row(),
+            field_sample_postgres_row(
+                secondary_depositional_environment="Lacustrine",
+                archaeological_context_description="Synthetic archaeological context."
+            ),
+            "archaeological_context_description was filled",
+        )
+
+    def test_archaeological_context_identifier_is_not_allowed_elsewhere(self):
+        self.assert_rule_parity(
+            field_sample_postgres_row(),
+            field_sample_postgres_row(
+                secondary_depositional_environment="Lacustrine",
+                archaeological_context_identifier="SYNTHETIC-CONTEXT-001"
+            ),
+            "archaeological_context_identifier was filled",
+        )
+
+    def test_feature_function_class_is_not_allowed_elsewhere(self):
+        self.assert_rule_parity(
+            field_sample_postgres_row(),
+            field_sample_postgres_row(
+                secondary_depositional_environment="Lacustrine",
+                feature_function_class=(
+                    "Accreted archaeological layers (floors, collapse layers and "
+                    "leveling fills and middens etc.)"
+                )
+            ),
+            "feature_function_class was filled",
+        )
+
+    def test_archaeological_registry_number_is_not_allowed_elsewhere(self):
+        self.assert_rule_parity(
+            field_sample_postgres_row(),
+            field_sample_postgres_row(
+                secondary_depositional_environment="Lacustrine",
+                archaeological_registry_number="SYNTHETIC-001",
+            ),
+            "archaeological_site_registry_number was filled",
         )

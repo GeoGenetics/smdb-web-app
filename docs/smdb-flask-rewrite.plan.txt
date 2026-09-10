@@ -258,6 +258,9 @@ real bug reports and uploads:
 - [x] `Other` values-column requirement, confirmed by
       `uploaded_data.validate_other_values()` for `primary_sampling_method`;
       the initial preflight reports the missing/blank case as an error.
+- [x] archaeological conditional fields: require description, identifier, and
+      feature/function class for archaeological contexts; reject those fields
+      and a site registry number outside such contexts.
 
 For every rule:
 

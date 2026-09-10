@@ -36,6 +36,12 @@ TEMPLATE_COLUMNS = {
     "field_sample_age_estimate_youngest": "Youngest age estimate",
     "broad_scale_environmental_context": "Broad-scale environmental context",
     "local_scale_environmental_context": "Local-scale environmental context",
+    "primary_depositional_environment": "Primary depositional field sampling environment",
+    "secondary_depositional_environment": "Secondary depositional field sampling environment",
+    "archaeological_registry_number": "Archaeological Site Registry Number",
+    "archaeological_context_description": "Archaeological field sampling context description",
+    "archaeological_context_identifier": "Archaeological Field Sampling Context Identifier",
+    "feature_function_class": "Interpreted field sampling feature/function class",
 }
 
 RULE_TEMPLATE_VERSION_REQUIRED = "field_sample.template_version_required"
@@ -59,6 +65,23 @@ RULE_INTERVAL_ASCENDING = "field_sample.interval_depth_must_be_ascending"
 RULE_DEPTH_INFERENCE_REQUIRED = "field_sample.depth_inference_method_required"
 RULE_DEPTH_INFERENCE_NOT_ALLOWED = "field_sample.depth_inference_method_without_depth"
 RULE_OTHER_VALUES_REQUIRED = "field_sample.other_values_required_for_primary_sampling_method"
+RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_REQUIRED = (
+    "field_sample.archaeological_context_description_required"
+)
+RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_REQUIRED = (
+    "field_sample.archaeological_context_identifier_required"
+)
+RULE_FEATURE_FUNCTION_CLASS_REQUIRED = "field_sample.feature_function_class_required"
+RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_NOT_ALLOWED = (
+    "field_sample.archaeological_context_description_not_allowed"
+)
+RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_NOT_ALLOWED = (
+    "field_sample.archaeological_context_identifier_not_allowed"
+)
+RULE_FEATURE_FUNCTION_CLASS_NOT_ALLOWED = "field_sample.feature_function_class_not_allowed"
+RULE_ARCHAEOLOGICAL_REGISTRY_NUMBER_NOT_ALLOWED = (
+    "field_sample.archaeological_registry_number_not_allowed"
+)
 
 # These are the two literal categories in
 # uploaded_data.check_water_depth_conditionals(), not a copied allowed-values
@@ -99,6 +122,13 @@ AIR_OR_WATER_MEDIA = frozenset(
     }
 )
 OTHER_SAMPLING_METHOD = 'Other (specify in "Other values" column)'
+ARCHAEOLOGICAL_DEPOSITIONAL_ENVIRONMENT = "Anthropogenic / archaeological"
+ARCHAEOLOGICAL_LOCAL_CONTEXTS = frozenset(
+    {
+        "Anthropogenic terrestrial biome [ENVO:01000219]",
+        "Archaeological site [ENVO:00000564]",
+    }
+)
 CGG_FIELD_SAMPLE_ID_PATTERN = re.compile(r"^CGG_\d{1}_\d{6}$")
 GENERAL_FIELD_SAMPLE_ID_PATTERN = re.compile(
     r"^[A-Z]{2}[A-Z0-9]{3}(?:\d{4}|UNKNOWN)\d{3}$"
@@ -600,6 +630,123 @@ def _validate_other_values_requirement(
     )
 
 
+def _validate_archaeological_conditionals(
+    row: Mapping[str, Any], report: ValidationReport
+) -> None:
+    """Mirror ``check_archaeological_conditionals`` without short-circuiting.
+
+    PostgreSQL raises only the first missing or disallowed archaeological field.
+    Preflight intentionally returns every independent finding so that a user can
+    correct an archaeological row, or remove accidental archaeological values
+    from a non-archaeological row, in one edit cycle.
+    """
+    # Preserve SQL's three-valued OR semantics. In the trigger, a NULL
+    # secondary depositional environment makes ``false OR NULL OR false``
+    # evaluate to NULL; both following ``IF`` branches are then skipped. This
+    # surprising database behavior is covered by the SMDB-dev parity tests and
+    # must not turn into a preflight-only rejection.
+    def equals_archaeological_environment(value: Any) -> bool | None:
+        if _is_blank(value):
+            return None
+        return value == ARCHAEOLOGICAL_DEPOSITIONAL_ENVIRONMENT
+
+    def is_archaeological_local_context(value: Any) -> bool | None:
+        if _is_blank(value):
+            return None
+        return value in ARCHAEOLOGICAL_LOCAL_CONTEXTS
+
+    conditions = (
+        equals_archaeological_environment(
+            row.get("primary_depositional_environment")
+        ),
+        equals_archaeological_environment(
+            row.get("secondary_depositional_environment")
+        ),
+        is_archaeological_local_context(row.get("local_scale_environmental_context")),
+    )
+    if True in conditions:
+        is_archaeological: bool | None = True
+    elif None in conditions:
+        is_archaeological = None
+    else:
+        is_archaeological = False
+    template_row = _template_row(row)
+
+    if is_archaeological is True:
+        required_fields = (
+            (
+                "archaeological_context_description",
+                RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_REQUIRED,
+            ),
+            (
+                "archaeological_context_identifier",
+                RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_REQUIRED,
+            ),
+            ("feature_function_class", RULE_FEATURE_FUNCTION_CLASS_REQUIRED),
+        )
+        for column, rule_id in required_fields:
+            value = row.get(column)
+            if not _is_blank(value):
+                continue
+            report.add(
+                ValidationError(
+                    rule_id=rule_id,
+                    message=(
+                        f"{column} is required when the depositional environment "
+                        "is anthropogenic or archaeological."
+                    ),
+                    template_row=template_row,
+                    template_column=TEMPLATE_COLUMNS[column],
+                    database_column=column,
+                    value=value,
+                )
+            )
+        return
+
+    # As in PL/pgSQL, ``IF NOT NULL`` does not execute. Only an explicitly
+    # false condition reaches the trigger's non-archaeological branch.
+    if is_archaeological is not False:
+        return
+
+    disallowed_fields = (
+        (
+            "archaeological_context_description",
+            RULE_ARCHAEOLOGICAL_CONTEXT_DESCRIPTION_NOT_ALLOWED,
+        ),
+        (
+            "archaeological_context_identifier",
+            RULE_ARCHAEOLOGICAL_CONTEXT_IDENTIFIER_NOT_ALLOWED,
+        ),
+        ("feature_function_class", RULE_FEATURE_FUNCTION_CLASS_NOT_ALLOWED),
+        (
+            "archaeological_registry_number",
+            RULE_ARCHAEOLOGICAL_REGISTRY_NUMBER_NOT_ALLOWED,
+        ),
+    )
+    for column, rule_id in disallowed_fields:
+        value = row.get(column)
+        if _is_blank(value):
+            continue
+        database_column = (
+            "archaeological_site_registry_number"
+            if column == "archaeological_registry_number"
+            else column
+        )
+        report.add(
+            ValidationError(
+                rule_id=rule_id,
+                message=(
+                    f"{database_column} was filled but no environment was set to "
+                    "anthropogenic or archaeological."
+                ),
+                template_row=template_row,
+                template_column=TEMPLATE_COLUMNS[column],
+                database_column=column,
+                value=value,
+            )
+        )
+
+
 def validate_field_sample_rows(
     rows: Iterable[Mapping[str, Any]],
     reference_data: ReferenceDataProvider,
@@ -624,4 +771,5 @@ def validate_field_sample_rows(
         _validate_sampling_method_depth_category(row, report)
         _validate_generic_depth_rules(row, report)
         _validate_other_values_requirement(row, report)
+        _validate_archaeological_conditionals(row, report)
     return report

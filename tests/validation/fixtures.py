@@ -89,6 +89,12 @@ def field_sample_row(**overrides):
         "broad_scale_environmental_context": "Terrestrial biome [ENVO:00000446]",
         "local_scale_environmental_context": "Forest biome [ENVO:01000174]",
         "collected_as_field_control": "No",
+        "primary_depositional_environment": "Lacustrine",
+        "secondary_depositional_environment": None,
+        "archaeological_registry_number": None,
+        "archaeological_context_description": None,
+        "archaeological_context_identifier": None,
+        "feature_function_class": None,
     }
     row.update(overrides)
     return row
